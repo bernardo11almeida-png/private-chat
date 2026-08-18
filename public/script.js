@@ -206,12 +206,17 @@ function connectSocket() {
     if (isActiveChat) {
       appendMessage(message);
       if (!isSender) playSound('receive');
+      if (friend) friend.unread_count = 0; // Zera se já estiver aberto
     } else {
       if (!isSender) {
         playSound('receive');
         showNotification(friend?.display_name || 'New Message', message.content, avatarOrDefault(friend?.avatar));
+        if (friend) {
+          friend.unread_count = (friend.unread_count || 0) + 1; // Incrementa
+        }
       }
     }
+    updateUnreadBadges();
   });
 
   socket.on('presence', ({ userId, online }) => {
@@ -393,12 +398,17 @@ async function loadFriends() {
     friends.forEach(friend => {
       const li = document.createElement('li');
       li.className = 'list-item';
-      li.innerHTML = `<div class="clickable"><img class="avatar" src="${avatarOrDefault(friend.avatar)}" /><div class="info"><div class="name">${escapeHtml(friend.display_name)}</div><div class="muted small">${friend.serial_id}</div></div></div><div class="actions"><button class="chat-btn btn-secondary">💬</button><button class="remove-btn btn-danger">🗑</button></div>`;
+      li.dataset.friendId = friend.id;
+      
+      const badgeHtml = friend.unread_count > 0 ? `<span class="avatar-badge">${friend.unread_count > 99 ? '99+' : friend.unread_count}</span>` : '';
+      
+      li.innerHTML = `<div class="clickable"><div class="avatar-wrap"><img class="avatar" src="${avatarOrDefault(friend.avatar)}" />${badgeHtml}</div><div class="info"><div class="name">${escapeHtml(friend.display_name)}</div><div class="muted small">${friend.serial_id}</div></div></div><div class="actions"><button class="chat-btn btn-secondary">💬</button><button class="remove-btn btn-danger">🗑</button></div>`;
       li.querySelector('.clickable').addEventListener('click', () => openProfileModal(friend.id, 'friend'));
       li.querySelector('.chat-btn').addEventListener('click', () => { switchView('chat'); openChat(friend); });
       li.querySelector('.remove-btn').addEventListener('click', async () => { await api('/friends/' + friend.id, { method: 'DELETE' }); loadFriends(); });
       list.appendChild(li);
     });
+    updateUnreadBadges();
   } catch (err) {}
 }
 
@@ -494,10 +504,76 @@ function renderChatFriendList() {
   cachedFriends.forEach(friend => {
     const li = document.createElement('li');
     li.className = 'list-item friend-item' + (activeFriend && activeFriend.id === friend.id ? ' selected' : '');
-    li.innerHTML = `<img class="avatar" src="${avatarOrDefault(friend.avatar)}" /><div class="info"><div class="name"><span class="online-dot ${onlineFriendIds.has(friend.id) ? 'online' : ''}"></span>${escapeHtml(friend.display_name)}</div></div>`;
+    li.dataset.friendId = friend.id;
+    
+    const badgeHtml = friend.unread_count > 0 ? `<span class="avatar-badge">${friend.unread_count > 99 ? '99+' : friend.unread_count}</span>` : '';
+    
+    li.innerHTML = `<div class="avatar-wrap"><img class="avatar" src="${avatarOrDefault(friend.avatar)}" />${badgeHtml}</div><div class="info"><div class="name"><span class="online-dot ${onlineFriendIds.has(friend.id) ? 'online' : ''}"></span>${escapeHtml(friend.display_name)}</div></div>`;
     li.addEventListener('click', () => openChat(friend));
     list.appendChild(li);
   });
+  updateUnreadBadges();
+}
+
+function updateUnreadBadges() {
+  const totalUnread = cachedFriends.reduce((sum, f) => sum + (f.unread_count || 0), 0);
+  const sidebarBadge = document.getElementById('dms-unread-badge');
+  if (sidebarBadge) {
+    if (totalUnread > 0) {
+      sidebarBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+      sidebarBadge.classList.remove('hidden');
+    } else {
+      sidebarBadge.classList.add('hidden');
+    }
+  }
+
+  // Atualiza a lista de amigos
+  const friendsList = document.getElementById('friends-list');
+  if (friendsList) {
+    cachedFriends.forEach(friend => {
+      const li = friendsList.querySelector(`[data-friend-id="${friend.id}"]`);
+      if (li) {
+        const wrap = li.querySelector('.avatar-wrap');
+        if (wrap) {
+          let badge = wrap.querySelector('.avatar-badge');
+          if (friend.unread_count > 0) {
+            if (!badge) {
+              badge = document.createElement('span');
+              badge.className = 'avatar-badge';
+              wrap.appendChild(badge);
+            }
+            badge.textContent = friend.unread_count > 99 ? '99+' : friend.unread_count;
+          } else if (badge) {
+            badge.remove();
+          }
+        }
+      }
+    });
+  }
+
+  // Atualiza a lista de DMs
+  const chatList = document.getElementById('chat-friends-list');
+  if (chatList) {
+    cachedFriends.forEach(friend => {
+      const li = chatList.querySelector(`[data-friend-id="${friend.id}"]`);
+      if (li) {
+        const wrap = li.querySelector('.avatar-wrap');
+        if (wrap) {
+          let badge = wrap.querySelector('.avatar-badge');
+          if (friend.unread_count > 0) {
+            if (!badge) {
+              badge = document.createElement('span');
+              badge.className = 'avatar-badge';
+              wrap.appendChild(badge);
+            }
+            badge.textContent = friend.unread_count > 99 ? '99+' : friend.unread_count;
+          } else if (badge) {
+            badge.remove();
+          }
+        }
+      }
+    });
+  }
 }
 
 function updateOnlineIndicators() {
@@ -509,15 +585,18 @@ function updateOnlineIndicators() {
 
 async function openChat(friend) {
   activeFriend = friend;
-  switchView('chat'); // Garante que muda para a tela de chat
+  switchView('chat');
   
-  // Pequeno atraso para garantir que o HTML carregou antes de procurar os elementos
   setTimeout(() => {
     document.getElementById('chat-empty').classList.add('hidden');
     document.getElementById('chat-active').classList.remove('hidden');
     document.getElementById('chat-header-avatar').src = avatarOrDefault(friend.avatar);
     document.getElementById('chat-header-name').textContent = friend.display_name;
     document.getElementById('chat-header-status').textContent = onlineFriendIds.has(friend.id) ? '● Online' : '● Offline';
+    
+    // Limpa o contador de não lidas
+    friend.unread_count = 0;
+    updateUnreadBadges();
     
     const messagesEl = document.getElementById('chat-messages');
     messagesEl.innerHTML = '<p class="muted small">Loading...</p>';
