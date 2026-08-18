@@ -177,27 +177,42 @@ async function loadFriendRequests() {
   try {
     const [{ requests }, { requests: outgoing }] = await Promise.all([api('/friends/requests'), api('/friends/requests/outgoing')]);
     cachedOutgoing = outgoing;
+    
     const list = document.getElementById('friend-requests-list');
     list.innerHTML = '';
     if (requests.length === 0) list.innerHTML = '<li class="muted small">No pending requests</li>';
+    
     requests.forEach(req => {
       const li = document.createElement('li');
       li.className = 'list-item';
       li.innerHTML = `<div class="clickable"><img class="avatar" src="${avatarOrDefault(req.avatar)}" /><div class="info"><div class="name">${escapeHtml(req.display_name)}</div><div class="muted small">${req.serial_id}</div></div></div><div class="actions"><button class="accept-btn">✔</button><button class="decline-btn btn-secondary">✖</button></div>`;
+      
       li.querySelector('.clickable').addEventListener('click', () => openProfileModal(req.id, 'stranger'));
-      li.querySelector('.accept-btn').addEventListener('click', async () => { await api('/friends/accept', { method: 'POST', body: JSON.stringify({ request_id: req.id }) }); loadFriendRequests(); loadFriends(); });
-      li.querySelector('.decline-btn').addEventListener('click', async () => { await api('/friends/decline', { method: 'POST', body: JSON.stringify({ request_id: req.id }) }); loadFriendRequests(); });
+      li.querySelector('.accept-btn').addEventListener('click', async () => { 
+        await api('/friends/accept', { method: 'POST', body: JSON.stringify({ request_id: req.request_id }) }); 
+        loadFriendRequests(); loadFriends(); 
+      });
+      li.querySelector('.decline-btn').addEventListener('click', async () => { 
+        await api('/friends/decline', { method: 'POST', body: JSON.stringify({ request_id: req.request_id }) }); 
+        loadFriendRequests(); 
+      });
       list.appendChild(li);
     });
+
     const outgoingList = document.getElementById('friend-requests-outgoing-list');
     outgoingList.innerHTML = '';
     if (outgoing.length === 0) outgoingList.innerHTML = '<li class="muted small">No outgoing requests</li>';
+    
     outgoing.forEach(req => {
       const li = document.createElement('li');
       li.className = 'list-item';
       li.innerHTML = `<div class="clickable"><img class="avatar" src="${avatarOrDefault(req.avatar)}" /><div class="info"><div class="name">${escapeHtml(req.display_name)}</div><div class="muted small">Waiting...</div></div></div><div class="actions"><button class="cancel-btn btn-secondary">✖</button></div>`;
+      
       li.querySelector('.clickable').addEventListener('click', () => openProfileModal(req.id, 'stranger'));
-      li.querySelector('.cancel-btn').addEventListener('click', async () => { await api('/friends/cancel', { method: 'POST', body: JSON.stringify({ request_id: req.id }) }); loadFriendRequests(); });
+      li.querySelector('.cancel-btn').addEventListener('click', async () => { 
+        await api('/friends/cancel', { method: 'POST', body: JSON.stringify({ request_id: req.request_id }) }); 
+        loadFriendRequests(); 
+      });
       outgoingList.appendChild(li);
     });
   } catch (err) {}

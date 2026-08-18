@@ -347,7 +347,8 @@ app.get('/api/friends/requests', requireAuth, async (req, res) => {
     .from('friend_requests')
     .select('id, users:sender_id(id, serial_id, username, display_name, avatar, banner)')
     .eq('receiver_id', req.session.userId).eq('status', 'pending');
-  const formatted = (requests || []).map(r => ({ id: r.id, ...r.users }));
+  
+  const formatted = (requests || []).map(r => ({ request_id: r.id, ...r.users }));
   res.json({ requests: formatted });
 });
 
@@ -356,7 +357,8 @@ app.get('/api/friends/requests/outgoing', requireAuth, async (req, res) => {
     .from('friend_requests')
     .select('id, users:receiver_id(id, serial_id, username, display_name, avatar)')
     .eq('sender_id', req.session.userId).eq('status', 'pending');
-  const formatted = (requests || []).map(r => ({ id: r.id, ...r.users }));
+  
+  const formatted = (requests || []).map(r => ({ request_id: r.id, ...r.users }));
   res.json({ requests: formatted });
 });
 
