@@ -928,41 +928,31 @@ textarea:focus {
   }
 }
 
-/* Correção do Scroll e Layout do Chat */
-.server-chat-layout {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.server-conversation {
-  height: 100%;
+/* CORREÇÃO DEFINITIVA DO SCROLL */
+.main-area { 
+  overflow: hidden !important; 
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
 }
 
-.server-chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 14px 18px;
+.view { 
+  height: 100% !important; 
+  overflow: hidden !important; 
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
-.chat-window {
-  height: 100%;
-  overflow: hidden;
-}
+/* Chat de Amigos (DMs) */
+.chat-layout { height: 100% !important; overflow: hidden; }
+.chat-window { height: 100% !important; display: flex; flex-direction: column; overflow: hidden; }
+.chat-active { height: 100% !important; display: flex; flex-direction: column; overflow: hidden; }
+.chat-messages { flex: 1; overflow-y: auto !important; min-height: 0; }
 
-.chat-active {
-  height: 100%;
-  overflow: hidden;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-}
+/* Chat de Servidores */
+.servers-layout { height: 100% !important; overflow: hidden; }
+.server-stage { height: 100% !important; display: flex; flex-direction: column; overflow: hidden; }
+.server-active { height: 100% !important; display: flex; flex-direction: column; overflow: hidden; }
+.server-chat-layout { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.server-conversation { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.server-chat-messages { flex: 1; overflow-y: auto !important; min-height: 0; }
