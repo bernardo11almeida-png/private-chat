@@ -1,13 +1,9 @@
 // serialId.js
-// Gera um Serial ID no formato #000000000 (9 digitos), garantindo unicidade no banco.
+const supabase = require('./db');
 
-const db = require('./db');
-
-function generateSerialId() {
+async function generateSerialId() {
   let serial;
   let exists = true;
-
-  const check = db.prepare('SELECT id FROM users WHERE serial_id = ?');
 
   while (exists) {
     let digits = '';
@@ -15,7 +11,14 @@ function generateSerialId() {
       digits += Math.floor(Math.random() * 10);
     }
     serial = '#' + digits;
-    exists = !!check.get(serial);
+
+    const { data } = await supabase
+      .from('users')
+      .select('id')
+      .eq('serial_id', serial)
+      .maybeSingle();
+
+    exists = !!data;
   }
 
   return serial;

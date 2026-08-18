@@ -1,12 +1,11 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PrivateChat</title>
   <link rel="stylesheet" href="style.css" />
   <script>
-    // Aplica o tema salvo antes de pintar a pagina, pra evitar "flash" de tema errado.
     (function () {
       var theme = localStorage.getItem('pc_theme') || 'dark';
       var accent = localStorage.getItem('pc_accent');
@@ -17,34 +16,31 @@
 </head>
 <body>
 
-  <!-- ===== Tela de autenticacao (login / registro) ===== -->
+  <!-- ===== Auth Screen ===== -->
   <div id="auth-screen" class="screen">
     <div class="auth-card">
       <h1 class="brand">PrivateChat</h1>
-
       <div class="tabs">
-        <button class="tab-btn active" data-tab="login">Entrar</button>
-        <button class="tab-btn" data-tab="register">Criar conta</button>
+        <button class="tab-btn active" data-tab="login">Login</button>
+        <button class="tab-btn" data-tab="register">Register</button>
       </div>
-
       <form id="login-form" class="auth-form">
-        <input type="text" id="login-username" placeholder="Usuario" required />
-        <input type="password" id="login-password" placeholder="Senha" required />
-        <button type="submit">Entrar</button>
+        <input type="text" id="login-username" placeholder="Username" required />
+        <input type="password" id="login-password" placeholder="Password" required />
+        <button type="submit">Login</button>
         <p class="form-error" id="login-error"></p>
       </form>
-
       <form id="register-form" class="auth-form hidden">
-        <input type="text" id="register-username" placeholder="Usuario" required />
-        <input type="text" id="register-display-name" placeholder="Nome de exibicao" required />
-        <input type="password" id="register-password" placeholder="Senha" required />
-        <button type="submit">Criar conta</button>
+        <input type="text" id="register-username" placeholder="Username" required />
+        <input type="text" id="register-display-name" placeholder="Display Name" required />
+        <input type="password" id="register-password" placeholder="Password" required />
+        <button type="submit">Register</button>
         <p class="form-error" id="register-error"></p>
       </form>
     </div>
   </div>
 
-  <!-- ===== Aplicativo principal ===== -->
+  <!-- ===== Main App ===== -->
   <div id="app-screen" class="screen hidden">
     <aside class="sidebar">
       <div class="sidebar-top">
@@ -60,6 +56,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
           <span>Users</span>
         </button>
+        <button class="nav-btn" data-view="servers" title="Servers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M9 4v16M15 4v16M4 9h16M4 15h16"/></svg>
+          <span>Servers</span>
+        </button>
       </div>
       <div class="sidebar-bottom">
         <button class="nav-btn" data-view="settings" title="Settings">
@@ -70,8 +70,7 @@
     </aside>
 
     <main class="main-area">
-
-      <!-- HOME: perfil do usuario -->
+      <!-- HOME -->
       <section id="view-home" class="view">
         <div class="profile-card">
           <div class="profile-banner" id="profile-banner-el"></div>
@@ -88,103 +87,148 @@
       <!-- FRIENDS -->
       <section id="view-friends" class="view hidden">
         <div class="panel">
-          <h2>Adicionar amigo</h2>
+          <h2>Add Friend</h2>
           <div class="add-friend-row">
             <input type="text" id="friend-serial-input" placeholder="Enter Serial ID... (#000000000)" />
-            <button id="send-friend-request-btn">Enviar</button>
+            <button id="send-friend-request-btn">Send Request</button>
           </div>
           <p class="form-error" id="add-friend-error"></p>
-
-          <h3>Solicitacoes recebidas</h3>
+          <h3>Pending Requests</h3>
           <ul id="friend-requests-list" class="simple-list"></ul>
-
-          <h3>Solicitacoes enviadas</h3>
+          <h3>Outgoing Requests</h3>
           <ul id="friend-requests-outgoing-list" class="simple-list"></ul>
-
-          <h3>Meus amigos</h3>
+          <h3>Your Friends</h3>
           <ul id="friends-list" class="simple-list"></ul>
         </div>
       </section>
 
-      <!-- USERS: busca por serial id -->
+      <!-- USERS -->
       <section id="view-users" class="view hidden">
         <div class="panel">
-          <h2>Buscar usuario</h2>
+          <h2>Search User</h2>
           <div class="add-friend-row">
             <input type="text" id="user-search-input" placeholder="Enter Serial ID... (#000000000)" />
-            <button id="user-search-btn">Buscar</button>
+            <button id="user-search-btn">Search</button>
           </div>
           <div id="user-search-result"></div>
         </div>
       </section>
 
+      <!-- SERVERS -->
+      <section id="view-servers" class="view hidden">
+        <div class="servers-layout">
+          <aside class="server-directory">
+            <div class="server-directory-heading"><span>YOUR SERVERS</span></div>
+            <div class="server-actions">
+              <form id="server-create-form" class="server-mini-form">
+                <input id="server-name-input" type="text" minlength="3" maxlength="80" placeholder="Server name..." required />
+                <button type="submit">Create</button>
+              </form>
+              <form id="server-join-form" class="server-mini-form">
+                <input id="server-invite-input" type="text" placeholder="Invite code..." required />
+                <button type="submit" class="btn-secondary">Join</button>
+              </form>
+              <p id="server-error" class="form-error"></p>
+            </div>
+            <p class="server-section-label">SERVERS</p>
+            <ul id="servers-list" class="server-list"></ul>
+          </aside>
+
+          <div class="server-stage">
+            <div id="server-chat-empty" class="server-empty-state">
+              <div class="server-empty-icon">#</div>
+              <h2>Your Servers</h2>
+              <p>Create a server or join using an invite code.</p>
+            </div>
+
+            <div id="server-chat-active" class="server-active hidden">
+              <header class="server-header">
+                <div class="server-title-wrap">
+                  <img id="server-chat-icon" class="server-initial" src="" alt="icon" style="display:none; object-fit:cover;" />
+                  <div id="server-chat-initial" class="server-initial">S</div>
+                  <div>
+                    <h2 id="server-chat-header-name"></h2>
+                    <p id="server-invite-label" class="muted small"></p>
+                  </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <button id="copy-server-invite-btn" class="btn-secondary">Copy Invite</button>
+                  <button id="open-server-settings-btn" class="btn-secondary">Settings</button>
+                </div>
+              </header>
+
+              <div class="server-chat-layout">
+                <aside class="server-channels">
+                  <p class="server-section-label">TEXT CHANNELS</p>
+                  <ul id="server-channels-list" class="simple-list" style="margin-bottom: 12px;"></ul>
+                  <form id="create-channel-form" class="server-mini-form">
+                    <input type="text" id="new-channel-name" placeholder="New channel..." required minlength="2" />
+                    <button type="submit">+</button>
+                  </form>
+                </aside>
+
+                <div class="server-conversation">
+                  <div class="channel-heading"><span>#</span><strong id="active-channel-name">general</strong></div>
+                  <div id="server-chat-messages" class="server-chat-messages"></div>
+                  <form id="server-chat-form" class="chat-input-row">
+                    <input type="text" id="server-chat-input" maxlength="4000" placeholder="Message" autocomplete="off" />
+                    <button type="submit" aria-label="Send message">➤</button>
+                  </form>
+                  <div id="chat-locked-notice" class="chat-locked hidden" style="padding: 16px; text-align: center; border-top: 1px solid var(--border); color: var(--text-muted); background: var(--bg-elevated-2); font-size: 14px;">
+                    🔒 You don't have permission to send messages in this channel.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      
       <!-- SETTINGS -->
       <section id="view-settings" class="view hidden">
         <div class="panel panel-wide">
-          <h2>Editar perfil</h2>
-
+          <h2>Edit Profile</h2>
           <div class="upload-row">
             <div class="upload-box">
               <label class="field-label">Banner</label>
               <div class="banner-preview" id="banner-preview"></div>
               <div class="upload-actions">
-                <label class="btn-secondary file-btn">
-                  Trocar banner
-                  <input type="file" id="banner-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-                </label>
-                <button type="button" id="remove-banner-btn" class="btn-secondary">Remover</button>
+                <label class="btn-secondary file-btn">Change Banner<input type="file" id="banner-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
+                <button type="button" id="remove-banner-btn" class="btn-secondary">Remove</button>
               </div>
             </div>
-
             <div class="upload-box">
-              <label class="field-label">Foto de perfil</label>
+              <label class="field-label">Profile Picture</label>
               <img id="avatar-preview" class="avatar avatar-lg" src="" alt="avatar" />
               <div class="upload-actions">
-                <label class="btn-secondary file-btn">
-                  Trocar foto
-                  <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-                </label>
-                <button type="button" id="remove-avatar-btn" class="btn-secondary">Remover</button>
+                <label class="btn-secondary file-btn">Change Photo<input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
+                <button type="button" id="remove-avatar-btn" class="btn-secondary">Remove</button>
               </div>
             </div>
           </div>
           <p class="form-error" id="upload-error"></p>
-
           <form id="settings-form">
-            <label class="field-label">Nome de exibicao</label>
+            <label class="field-label">Display Name</label>
             <input type="text" id="settings-display-name" />
-
             <label class="field-label">Bio</label>
             <textarea id="settings-bio" rows="3"></textarea>
-
-            <button type="submit">Salvar alteracoes</button>
+            <button type="submit">Save Changes</button>
             <p class="form-success" id="settings-success"></p>
           </form>
-
-          <h2 class="section-title">Aparencia</h2>
-          <label class="field-label">Tema</label>
+          <h2 class="section-title">Appearance</h2>
+          <label class="field-label">Theme</label>
           <div class="theme-grid" id="theme-grid">
-            <button type="button" class="theme-swatch" data-theme="dark">
-              <span class="swatch-preview swatch-dark"></span> Escuro
-            </button>
-            <button type="button" class="theme-swatch" data-theme="light">
-              <span class="swatch-preview swatch-light"></span> Claro
-            </button>
-            <button type="button" class="theme-swatch" data-theme="midnight">
-              <span class="swatch-preview swatch-midnight"></span> Meia-noite
-            </button>
-            <button type="button" class="theme-swatch" data-theme="forest">
-              <span class="swatch-preview swatch-forest"></span> Floresta
-            </button>
+            <button type="button" class="theme-swatch" data-theme="dark"><span class="swatch-preview swatch-dark"></span> Dark</button>
+            <button type="button" class="theme-swatch" data-theme="light"><span class="swatch-preview swatch-light"></span> Light</button>
+            <button type="button" class="theme-swatch" data-theme="midnight"><span class="swatch-preview swatch-midnight"></span> Midnight</button>
+            <button type="button" class="theme-swatch" data-theme="forest"><span class="swatch-preview swatch-forest"></span> Forest</button>
           </div>
-
-          <label class="field-label">Cor de destaque</label>
+          <label class="field-label">Accent Color</label>
           <div class="accent-row">
             <input type="color" id="accent-input" value="#5865f2" />
-            <button type="button" id="accent-reset-btn" class="btn-secondary">Restaurar padrao</button>
+            <button type="button" id="accent-reset-btn" class="btn-secondary">Reset Default</button>
           </div>
-
-          <button id="logout-btn" class="logout-btn">Sair da conta</button>
+          <button id="logout-btn" class="logout-btn">Log Out</button>
         </div>
       </section>
 
@@ -192,14 +236,14 @@
       <section id="view-chat" class="view hidden">
         <div class="chat-layout">
           <div class="chat-friend-list">
-            <h3>Conversas</h3>
+            <h3>Direct Messages</h3>
             <ul id="chat-friends-list" class="simple-list"></ul>
           </div>
           <div class="chat-window">
-            <div id="chat-empty" class="chat-empty">Selecione um amigo para conversar</div>
+            <div id="chat-empty" class="chat-empty">Select a friend to chat</div>
             <div id="chat-active" class="chat-active hidden">
               <div class="chat-header">
-                <img id="chat-header-avatar" class="avatar" src="" alt="" />
+                <img id="chat-header-avatar" class="avatar" src="" alt="avatar" />
                 <div>
                   <div id="chat-header-name"></div>
                   <div id="chat-header-status" class="muted small">● Offline</div>
@@ -207,10 +251,8 @@
               </div>
               <div id="chat-messages" class="chat-messages"></div>
               <form id="chat-form" class="chat-input-row">
-                <input type="text" id="chat-input" placeholder="Digite uma mensagem..." autocomplete="off" />
-                <button type="submit">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
-                </button>
+                <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" />
+                <button type="submit">➤</button>
               </form>
             </div>
           </div>
@@ -220,12 +262,10 @@
     </main>
   </div>
 
-  <!-- ===== Popout de perfil (estilo Discord) ===== -->
+  <!-- ===== Profile Popout Modal ===== -->
   <div id="profile-modal" class="modal-backdrop hidden">
     <div class="profile-modal-card">
-      <button id="profile-modal-close" class="modal-close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-      </button>
+      <button id="profile-modal-close" class="modal-close">✖</button>
       <div class="profile-banner" id="modal-banner"></div>
       <div class="profile-card-body">
         <img id="modal-avatar" class="avatar avatar-lg avatar-overlap" src="" alt="avatar" />
@@ -235,6 +275,48 @@
         <p id="modal-bio" class="bio"></p>
         <div id="modal-actions" class="modal-actions"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== Server Settings Modal ===== -->
+  <div id="server-settings-modal" class="modal-backdrop hidden">
+    <div class="panel panel-wide" style="max-height: 90vh; overflow-y: auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2>Server Settings</h2>
+        <button id="close-server-settings" class="btn-secondary">Close</button>
+      </div>
+      <div class="upload-row" style="margin: 20px 0;">
+        <div class="upload-box">
+          <label class="field-label">Server Icon</label>
+          <img id="server-icon-preview" class="avatar avatar-lg" src="" alt="icon" style="border-radius: 50%; background: var(--bg-elevated-2);" />
+          <div class="upload-actions">
+            <label class="btn-secondary file-btn">Change Icon<input type="file" id="server-icon-input" accept="image/png,image/jpeg,image/webp" hidden /></label>
+          </div>
+        </div>
+        <div class="upload-box">
+          <label class="field-label">Server Name</label>
+          <input type="text" id="server-edit-name" />
+          <div class="upload-actions">
+            <button id="save-server-name-btn" class="btn-secondary">Save Name</button>
+          </div>
+        </div>
+      </div>
+      <h3>Roles</h3>
+      <div style="display:flex; gap:8px; margin-bottom: 12px;">
+        <input type="text" id="new-role-name" placeholder="Role name (e.g., Admin)" />
+        <input type="color" id="new-role-color" value="#5865f2" style="width: 50px; padding: 2px;" />
+        <button id="create-role-btn">Create Role</button>
+      </div>
+      <ul id="server-roles-list" class="simple-list"></ul>
+      
+      <h3>Members & Roles Assignment</h3>
+      <ul id="server-members-list" class="simple-list"></ul>
+      
+      <h3>Channel Permissions</h3>
+      <div style="margin-bottom: 10px;">
+        <select id="perm-channel-select" style="width: 100%; padding: 10px; background: var(--bg-elevated-2); border: 1px solid var(--border); color: var(--text);"></select>
+      </div>
+      <ul id="channel-permissions-list" class="simple-list"></ul>
     </div>
   </div>
 

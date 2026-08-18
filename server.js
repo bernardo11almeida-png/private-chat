@@ -1,16 +1,15 @@
 // server.js
-// Backend principal: autenticacao, perfil, amigos e chat privado.
-
-const fs = require('fs');
+require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const http = require('http');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
 
-const db = require('./db');
+const supabase = require('./db');
 const { generateSerialId } = require('./serialId');
 
 const app = express();
@@ -18,68 +17,64 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
+const VALID_STATUSES = ['online', 'away', 'busy', 'invisible'];
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const sessionMiddleware = session({
-  secret: 'private-chat-dev-secret', // troque isso em producao
+  secret: process.env.SESSION_SECRET || 'private-chat-dev-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 * 24 * 7 } // 7 dias
+  cookie: { maxAge: 1000 * 60 * 60 * 24 * 7 }
 });
-
 app.use(sessionMiddleware);
-
-// Compartilha a sessao HTTP com o socket.io, assim sabemos quem esta conectado.
 io.engine.use(sessionMiddleware);
 
-// ---------- Upload de arquivos (avatar / banner) ----------
+// ---------- Rate limiting ----------
+const loginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Muitas tentativas. Tente novamente em alguns minutos.' }
+});
 
-const AVATAR_DIR = path.join(__dirname, 'public', 'uploads', 'avatars');
-const BANNER_DIR = path.join(__dirname, 'public', 'uploads', 'banners');
-fs.mkdirSync(AVATAR_DIR, { recursive: true });
-fs.mkdirSync(BANNER_DIR, { recursive: true });
-
+// ---------- Uploads (memória -> Supabase Storage) ----------
 const ALLOWED_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-
-function imageFileFilter(req, file, cb) {
-  if (!ALLOWED_MIME.includes(file.mimetype)) {
-    return cb(new Error('Formato de imagem invalido (use PNG, JPG, WEBP ou GIF)'));
-  }
-  cb(null, true);
-}
-
-function makeStorage(destDir, prefix) {
-  return multer.diskStorage({
-    destination: (req, file, cb) => cb(null, destDir),
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || '.png';
-      cb(null, `${prefix}-${req.session.userId}-${Date.now()}${ext}`);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_MIME.includes(file.mimetype)) {
+      return cb(new Error('Formato invalido (use PNG, JPG, WEBP ou GIF)'));
     }
-  });
+    cb(null, true);
+  },
+  limits: { fileSize: 8 * 1024 * 1024 }
+});
+
+async function uploadToSupabase(bucket, fileBuffer, fileName, mimetype) {
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, fileBuffer, { contentType: mimetype, upsert: false });
+  
+  if (error) throw new Error('Erro ao salvar imagem');
+  return supabase.storage.from(bucket).getPublicUrl(fileName).data.publicUrl;
 }
 
-const uploadAvatar = multer({
-  storage: makeStorage(AVATAR_DIR, 'avatar'),
-  fileFilter: imageFileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
-});
-
-const uploadBanner = multer({
-  storage: makeStorage(BANNER_DIR, 'banner'),
-  fileFilter: imageFileFilter,
-  limits: { fileSize: 8 * 1024 * 1024 } // 8MB
-});
-
-function deleteOldUpload(relativePath) {
-  if (!relativePath || !relativePath.startsWith('/uploads/')) return;
-  const abs = path.join(__dirname, 'public', relativePath);
-  fs.unlink(abs, () => {}); // ignora erro se o arquivo nao existir
+async function deleteOldUpload(url) {
+  if (!url) return;
+  try {
+    const match = url.match(/\/public\/([a-zA-Z]+)\/(.+)$/);
+    if (match) {
+      const bucket = match[1];
+      const filePath = match[2];
+      await supabase.storage.from(bucket).remove([filePath]);
+    }
+  } catch (err) { /* ignora */ }
 }
 
 // ---------- Helpers ----------
-
 function publicUser(row) {
   if (!row) return null;
   return {
@@ -89,353 +84,633 @@ function publicUser(row) {
     display_name: row.display_name,
     avatar: row.avatar,
     banner: row.banner,
-    bio: row.bio
+    bio: row.bio,
+    status: row.status,
+    has_security_question: !!row.security_question
   };
 }
 
 function requireAuth(req, res, next) {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Nao autenticado' });
-  }
+  if (!req.session.userId) return res.status(401).json({ error: 'Nao autenticado' });
   next();
 }
 
-function areFriends(userA, userB) {
-  const row = db.prepare(`
-    SELECT id FROM friendships
-    WHERE (user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?)
-  `).get(userA, userB, userB, userA);
-  return !!row;
+async function areFriends(userA, userB) {
+  const { data } = await supabase
+    .from('friendships')
+    .select('id')
+    .or(`and(user1_id.eq.${userA},user2_id.eq.${userB}),and(user1_id.eq.${userB},user2_id.eq.${userA})`)
+    .maybeSingle();
+  return !!data;
+}
+
+async function isBlocked(userA, userB) {
+  const { data } = await supabase
+    .from('blocks')
+    .select('id')
+    .or(`and(blocker_id.eq.${userA},blocked_id.eq.${userB}),and(blocker_id.eq.${userB},blocked_id.eq.${userA})`)
+    .maybeSingle();
+  return !!data;
+}
+
+async function removeFriendshipAndRequests(userA, userB) {
+  await supabase.from('friendships').delete()
+    .or(`and(user1_id.eq.${userA},user2_id.eq.${userB}),and(user1_id.eq.${userB},user2_id.eq.${userA})`);
+  await supabase.from('friend_requests').delete()
+    .or(`and(sender_id.eq.${userA},receiver_id.eq.${userB}),and(sender_id.eq.${userB},receiver_id.eq.${userA})`);
 }
 
 // ---------- Auth ----------
-
-app.post('/api/register', (req, res) => {
+app.post('/api/register', loginLimiter, async (req, res) => {
   const { username, password, display_name } = req.body;
+  if (!username || !password || !display_name) return res.status(400).json({ error: 'Preencha tudo' });
+  if (username.length < 3) return res.status(400).json({ error: 'Usuario curto' });
+  if (password.length < 4) return res.status(400).json({ error: 'Senha curta' });
 
-  if (!username || !password || !display_name) {
-    return res.status(400).json({ error: 'Preencha usuario, senha e nome de exibicao' });
-  }
-  if (username.length < 3) {
-    return res.status(400).json({ error: 'Usuario deve ter pelo menos 3 caracteres' });
-  }
-  if (password.length < 4) {
-    return res.status(400).json({ error: 'Senha deve ter pelo menos 4 caracteres' });
-  }
-
-  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
-  if (existing) {
-    return res.status(409).json({ error: 'Esse usuario ja existe' });
-  }
+  const { data: existing } = await supabase.from('users').select('id').eq('username', username).maybeSingle();
+  if (existing) return res.status(409).json({ error: 'Usuario ja existe' });
 
   const hashed = bcrypt.hashSync(password, 10);
-  const serial = generateSerialId();
+  const serial = await generateSerialId();
 
-  const insert = db.prepare(`
-    INSERT INTO users (serial_id, username, display_name, password, avatar, bio)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  const info = insert.run(serial, username, display_name, hashed, '', '');
+  const { data: newUser, error } = await supabase.from('users')
+    .insert({ serial_id: serial, username, display_name, password: hashed, avatar: '', bio: '' })
+    .select().single();
 
-  req.session.userId = info.lastInsertRowid;
-
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-  res.json({ user: publicUser(user) });
+  if (error) return res.status(500).json({ error: 'Erro ao registrar' });
+  
+  req.session.userId = newUser.id;
+  res.json({ user: publicUser(newUser) });
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-
+  const { data: user } = await supabase.from('users').select('*').eq('username', username).maybeSingle();
   if (!user || !bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ error: 'Usuario ou senha invalidos' });
+    return res.status(401).json({ error: 'Credenciais invalidas' });
   }
-
   req.session.userId = user.id;
   res.json({ user: publicUser(user) });
 });
 
-app.post('/api/logout', (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
-});
+app.post('/api/logout', (req, res) => req.session.destroy(() => res.json({ ok: true })));
 
-app.get('/api/me', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+app.get('/api/me', requireAuth, async (req, res) => {
+  const { data: user } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
   res.json({ user: publicUser(user) });
 });
 
+// ---------- Senha e Conta ----------
+app.put('/api/account/security-question', requireAuth, async (req, res) => {
+  const { question, answer } = req.body;
+  if (!question || !answer) return res.status(400).json({ error: 'Preencha os dados' });
+  const answerHash = bcrypt.hashSync(answer.trim().toLowerCase(), 10);
+  await supabase.from('users').update({ security_question: question.trim(), security_answer_hash: answerHash }).eq('id', req.session.userId);
+  res.json({ ok: true });
+});
+
+app.get('/api/account/security-question', loginLimiter, async (req, res) => {
+  const { username } = req.query;
+  const { data: user } = await supabase.from('users').select('security_question').eq('username', username).maybeSingle();
+  if (!user || !user.security_question) return res.status(404).json({ error: 'Sem pergunta cadastrada' });
+  res.json({ question: user.security_question });
+});
+
+app.post('/api/account/reset-password', loginLimiter, async (req, res) => {
+  const { username, answer, new_password } = req.body;
+  if (!new_password || new_password.length < 4) return res.status(400).json({ error: 'Senha curta' });
+  const { data: user } = await supabase.from('users').select('*').eq('username', username).maybeSingle();
+  if (!user || !user.security_answer_hash) return res.status(404).json({ error: 'Sem pergunta cadastrada' });
+  if (!bcrypt.compareSync((answer || '').trim().toLowerCase(), user.security_answer_hash)) return res.status(401).json({ error: 'Resposta incorreta' });
+  const hashed = bcrypt.hashSync(new_password, 10);
+  await supabase.from('users').update({ password: hashed }).eq('id', user.id);
+  res.json({ ok: true });
+});
+
+app.put('/api/account/password', requireAuth, async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!new_password || new_password.length < 4) return res.status(400).json({ error: 'Senha curta' });
+  const { data: user } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
+  if (!bcrypt.compareSync(current_password || '', user.password)) return res.status(401).json({ error: 'Senha atual incorreta' });
+  const hashed = bcrypt.hashSync(new_password, 10);
+  await supabase.from('users').update({ password: hashed }).eq('id', req.session.userId);
+  res.json({ ok: true });
+});
+
+app.delete('/api/account', requireAuth, async (req, res) => {
+  const { password } = req.body;
+  const { data: user } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
+  if (!bcrypt.compareSync(password || '', user.password)) return res.status(401).json({ error: 'Senha incorreta' });
+  const uid = req.session.userId;
+  
+  await deleteOldUpload(user.avatar);
+  await deleteOldUpload(user.banner);
+  await supabase.from('messages').delete().or(`sender_id.eq.${uid},receiver_id.eq.${uid}`);
+  await supabase.from('friendships').delete().or(`user1_id.eq.${uid},user2_id.eq.${uid}`);
+  await supabase.from('friend_requests').delete().or(`sender_id.eq.${uid},receiver_id.eq.${uid}`);
+  await supabase.from('blocks').delete().or(`blocker_id.eq.${uid},blocked_id.eq.${uid}`);
+  await supabase.from('friend_meta').delete().or(`owner_id.eq.${uid},friend_id.eq.${uid}`);
+  await supabase.from('users').delete().eq('id', uid);
+
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+// ---------- Status ----------
+app.put('/api/status', requireAuth, async (req, res) => {
+  const { status } = req.body;
+  if (!VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Status invalido' });
+  await supabase.from('users').update({ status }).eq('id', req.session.userId);
+  broadcastPresence(req.session.userId);
+  res.json({ ok: true });
+});
+
 // ---------- Perfil ----------
-
-app.put('/api/profile', requireAuth, (req, res) => {
+app.put('/api/profile', requireAuth, async (req, res) => {
   const { display_name, bio } = req.body;
-  const current = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
-
-  db.prepare(`
-    UPDATE users SET display_name = ?, bio = ? WHERE id = ?
-  `).run(
-    display_name ?? current.display_name,
-    bio ?? current.bio,
-    req.session.userId
-  );
-
-  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+  const { data: current } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
+  await supabase.from('users').update({
+    display_name: display_name ?? current.display_name,
+    bio: bio ?? current.bio
+  }).eq('id', req.session.userId);
+  const { data: updated } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
   res.json({ user: publicUser(updated) });
 });
 
 app.post('/api/upload/avatar', requireAuth, (req, res) => {
-  uploadAvatar.single('avatar')(req, res, (err) => {
+  upload.single('avatar')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-
-    const current = db.prepare('SELECT avatar FROM users WHERE id = ?').get(req.session.userId);
-    const relativePath = '/uploads/avatars/' + req.file.filename;
-
-    db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(relativePath, req.session.userId);
-    deleteOldUpload(current.avatar);
-
-    const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
-    res.json({ user: publicUser(updated) });
+    try {
+      const { data: current } = await supabase.from('users').select('avatar').eq('id', req.session.userId).maybeSingle();
+      if (current?.avatar) await deleteOldUpload(current.avatar);
+      const fileName = `avatar-${req.session.userId}-${Date.now()}${path.extname(req.file.originalname) || '.png'}`;
+      const publicUrl = await uploadToSupabase('avatars', req.file.buffer, fileName, req.file.mimetype);
+      await supabase.from('users').update({ avatar: publicUrl }).eq('id', req.session.userId);
+      const { data: updated } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
+      res.json({ user: publicUser(updated) });
+    } catch (e) { res.status(500).json({ error: 'Erro no upload' }); }
   });
 });
 
 app.post('/api/upload/banner', requireAuth, (req, res) => {
-  uploadBanner.single('banner')(req, res, (err) => {
+  upload.single('banner')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-
-    const current = db.prepare('SELECT banner FROM users WHERE id = ?').get(req.session.userId);
-    const relativePath = '/uploads/banners/' + req.file.filename;
-
-    db.prepare('UPDATE users SET banner = ? WHERE id = ?').run(relativePath, req.session.userId);
-    deleteOldUpload(current.banner);
-
-    const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
-    res.json({ user: publicUser(updated) });
+    try {
+      const { data: current } = await supabase.from('users').select('banner').eq('id', req.session.userId).maybeSingle();
+      if (current?.banner) await deleteOldUpload(current.banner);
+      const fileName = `banner-${req.session.userId}-${Date.now()}${path.extname(req.file.originalname) || '.png'}`;
+      const publicUrl = await uploadToSupabase('banners', req.file.buffer, fileName, req.file.mimetype);
+      await supabase.from('users').update({ banner: publicUrl }).eq('id', req.session.userId);
+      const { data: updated } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
+      res.json({ user: publicUser(updated) });
+    } catch (e) { res.status(500).json({ error: 'Erro no upload' }); }
   });
 });
 
-app.delete('/api/upload/avatar', requireAuth, (req, res) => {
-  const current = db.prepare('SELECT avatar FROM users WHERE id = ?').get(req.session.userId);
-  deleteOldUpload(current.avatar);
-  db.prepare('UPDATE users SET avatar = NULL WHERE id = ?').run(req.session.userId);
-  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+app.delete('/api/upload/avatar', requireAuth, async (req, res) => {
+  const { data: current } = await supabase.from('users').select('avatar').eq('id', req.session.userId).maybeSingle();
+  await deleteOldUpload(current.avatar);
+  await supabase.from('users').update({ avatar: null }).eq('id', req.session.userId);
+  const { data: updated } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
   res.json({ user: publicUser(updated) });
 });
 
-app.delete('/api/upload/banner', requireAuth, (req, res) => {
-  const current = db.prepare('SELECT banner FROM users WHERE id = ?').get(req.session.userId);
-  deleteOldUpload(current.banner);
-  db.prepare('UPDATE users SET banner = NULL WHERE id = ?').run(req.session.userId);
-  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+app.delete('/api/upload/banner', requireAuth, async (req, res) => {
+  const { data: current } = await supabase.from('users').select('banner').eq('id', req.session.userId).maybeSingle();
+  await deleteOldUpload(current.banner);
+  await supabase.from('users').update({ banner: null }).eq('id', req.session.userId);
+  const { data: updated } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
   res.json({ user: publicUser(updated) });
 });
 
-// Perfil publico de qualquer usuario (usado no popout "ver perfil")
-app.get('/api/users/:id', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(req.params.id));
+app.get('/api/users/:id', requireAuth, async (req, res) => {
+  const { data: user } = await supabase.from('users').select('*').eq('id', Number(req.params.id)).maybeSingle();
   if (!user) return res.status(404).json({ error: 'Usuario nao encontrado' });
   res.json({ user: publicUser(user) });
 });
 
-// Busca um usuario pelo Serial ID (usado na tela de Friends/Users)
-app.get('/api/users/search', requireAuth, (req, res) => {
+app.get('/api/users/search', requireAuth, async (req, res) => {
   const { serial_id } = req.query;
   if (!serial_id) return res.status(400).json({ error: 'Informe um Serial ID' });
-
-  const user = db.prepare('SELECT * FROM users WHERE serial_id = ?').get(serial_id.trim());
-  if (!user) return res.status(404).json({ error: 'Nenhum usuario encontrado com esse Serial ID' });
-
+  const { data: user } = await supabase.from('users').select('*').eq('serial_id', serial_id.trim()).maybeSingle();
+  if (!user) return res.status(404).json({ error: 'Nenhum usuario encontrado' });
   res.json({ user: publicUser(user) });
 });
 
-// Solicitacoes enviadas pelo proprio usuario e ainda pendentes (QOL: permite cancelar)
-app.get('/api/friends/requests/outgoing', requireAuth, (req, res) => {
-  const outgoing = db.prepare(`
-    SELECT fr.id, u.id as user_id, u.serial_id, u.username, u.display_name, u.avatar
-    FROM friend_requests fr
-    JOIN users u ON u.id = fr.receiver_id
-    WHERE fr.sender_id = ? AND fr.status = 'pending'
-  `).all(req.session.userId);
-
-  res.json({ requests: outgoing });
+// ---------- Bloqueios ----------
+app.post('/api/block', requireAuth, async (req, res) => {
+  const targetId = Number(req.body.user_id);
+  if (targetId === req.session.userId) return res.status(400).json({ error: 'Nao pode bloquear a si mesmo' });
+  const { data: target } = await supabase.from('users').select('id').eq('id', targetId).maybeSingle();
+  if (!target) return res.status(404).json({ error: 'Usuario nao encontrado' });
+  await supabase.from('blocks').upsert({ blocker_id: req.session.userId, blocked_id: targetId });
+  await removeFriendshipAndRequests(req.session.userId, targetId);
+  res.json({ ok: true });
 });
 
-app.post('/api/friends/cancel', requireAuth, (req, res) => {
-  const { request_id } = req.body;
-  const request = db.prepare('SELECT * FROM friend_requests WHERE id = ?').get(request_id);
-
-  if (!request || request.sender_id !== req.session.userId || request.status !== 'pending') {
-    return res.status(404).json({ error: 'Solicitacao nao encontrada' });
-  }
-
-  db.prepare('DELETE FROM friend_requests WHERE id = ?').run(request_id);
+app.delete('/api/block/:userId', requireAuth, async (req, res) => {
+  await supabase.from('blocks').delete().eq('blocker_id', req.session.userId).eq('blocked_id', Number(req.params.userId));
   res.json({ ok: true });
+});
+
+app.get('/api/blocks', requireAuth, async (req, res) => {
+  const { data: blocked } = await supabase
+    .from('blocks')
+    .select('blocked_id, users:users!blocks_blocked_id_fkey(id, serial_id, username, display_name, avatar)')
+    .eq('blocker_id', req.session.userId);
+  const formatted = (blocked || []).map(b => b.users).filter(Boolean);
+  res.json({ blocked: formatted });
 });
 
 // ---------- Amigos ----------
-
-app.post('/api/friends/request', requireAuth, (req, res) => {
+app.post('/api/friends/request', requireAuth, async (req, res) => {
   const { serial_id } = req.body;
-  const target = db.prepare('SELECT * FROM users WHERE serial_id = ?').get((serial_id || '').trim());
-
+  const { data: target } = await supabase.from('users').select('*').eq('serial_id', (serial_id || '').trim()).maybeSingle();
   if (!target) return res.status(404).json({ error: 'Usuario nao encontrado' });
-  if (target.id === req.session.userId) {
-    return res.status(400).json({ error: 'Voce nao pode adicionar a si mesmo' });
-  }
-  if (areFriends(req.session.userId, target.id)) {
-    return res.status(409).json({ error: 'Voces ja sao amigos' });
-  }
+  if (target.id === req.session.userId) return res.status(400).json({ error: 'Nao pode adicionar a si mesmo' });
+  if (await isBlocked(req.session.userId, target.id)) return res.status(403).json({ error: 'Bloqueado' });
+  if (await areFriends(req.session.userId, target.id)) return res.status(409).json({ error: 'Ja sao amigos' });
+  
+  const { data: pending } = await supabase.from('friend_requests')
+    .select('id').eq('status', 'pending')
+    .or(`and(sender_id.eq.${req.session.userId},receiver_id.eq.${target.id}),and(sender_id.eq.${target.id},receiver_id.eq.${req.session.userId})`)
+    .maybeSingle();
+  if (pending) return res.status(409).json({ error: 'Ja existe solicitacao pendente' });
 
-  const pending = db.prepare(`
-    SELECT id FROM friend_requests
-    WHERE status = 'pending'
-      AND ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
-  `).get(req.session.userId, target.id, target.id, req.session.userId);
-
-  if (pending) return res.status(409).json({ error: 'Ja existe uma solicitacao pendente' });
-
-  db.prepare(`
-    INSERT INTO friend_requests (sender_id, receiver_id, status) VALUES (?, ?, 'pending')
-  `).run(req.session.userId, target.id);
-
+  await supabase.from('friend_requests').insert({ sender_id: req.session.userId, receiver_id: target.id, status: 'pending' });
   res.json({ ok: true });
 });
 
-app.get('/api/friends/requests', requireAuth, (req, res) => {
-  const incoming = db.prepare(`
-    SELECT fr.id, u.id as user_id, u.serial_id, u.username, u.display_name, u.avatar, u.banner
-    FROM friend_requests fr
-    JOIN users u ON u.id = fr.sender_id
-    WHERE fr.receiver_id = ? AND fr.status = 'pending'
-  `).all(req.session.userId);
-
-  res.json({ requests: incoming });
+app.get('/api/friends/requests', requireAuth, async (req, res) => {
+  const { data: requests } = await supabase
+    .from('friend_requests')
+    .select('id, users:sender_id(id, serial_id, username, display_name, avatar, banner)')
+    .eq('receiver_id', req.session.userId).eq('status', 'pending');
+  const formatted = (requests || []).map(r => ({ id: r.id, ...r.users }));
+  res.json({ requests: formatted });
 });
 
-app.post('/api/friends/accept', requireAuth, (req, res) => {
+app.get('/api/friends/requests/outgoing', requireAuth, async (req, res) => {
+  const { data: requests } = await supabase
+    .from('friend_requests')
+    .select('id, users:receiver_id(id, serial_id, username, display_name, avatar)')
+    .eq('sender_id', req.session.userId).eq('status', 'pending');
+  const formatted = (requests || []).map(r => ({ id: r.id, ...r.users }));
+  res.json({ requests: formatted });
+});
+
+app.post('/api/friends/cancel', requireAuth, async (req, res) => {
   const { request_id } = req.body;
-  const request = db.prepare('SELECT * FROM friend_requests WHERE id = ?').get(request_id);
-
-  if (!request || request.receiver_id !== req.session.userId || request.status !== 'pending') {
-    return res.status(404).json({ error: 'Solicitacao nao encontrada' });
-  }
-
-  db.prepare(`UPDATE friend_requests SET status = 'accepted' WHERE id = ?`).run(request_id);
-  db.prepare(`
-    INSERT INTO friendships (user1_id, user2_id) VALUES (?, ?)
-  `).run(request.sender_id, request.receiver_id);
-
+  const { data: request } = await supabase.from('friend_requests').select('*').eq('id', request_id).maybeSingle();
+  if (!request || request.sender_id !== req.session.userId || request.status !== 'pending') return res.status(404).json({ error: 'Solicitacao nao encontrada' });
+  await supabase.from('friend_requests').delete().eq('id', request_id);
   res.json({ ok: true });
 });
 
-app.post('/api/friends/decline', requireAuth, (req, res) => {
+app.post('/api/friends/accept', requireAuth, async (req, res) => {
   const { request_id } = req.body;
-  const request = db.prepare('SELECT * FROM friend_requests WHERE id = ?').get(request_id);
-
-  if (!request || request.receiver_id !== req.session.userId || request.status !== 'pending') {
-    return res.status(404).json({ error: 'Solicitacao nao encontrada' });
-  }
-
-  db.prepare(`UPDATE friend_requests SET status = 'declined' WHERE id = ?`).run(request_id);
+  const { data: request } = await supabase.from('friend_requests').select('*').eq('id', request_id).maybeSingle();
+  if (!request || request.receiver_id !== req.session.userId || request.status !== 'pending') return res.status(404).json({ error: 'Solicitacao nao encontrada' });
+  await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', request_id);
+  await supabase.from('friendships').insert({ user1_id: request.sender_id, user2_id: request.receiver_id });
   res.json({ ok: true });
 });
 
-app.delete('/api/friends/:friendId', requireAuth, (req, res) => {
+app.post('/api/friends/decline', requireAuth, async (req, res) => {
+  const { request_id } = req.body;
+  const { data: request } = await supabase.from('friend_requests').select('*').eq('id', request_id).maybeSingle();
+  if (!request || request.receiver_id !== req.session.userId || request.status !== 'pending') return res.status(404).json({ error: 'Solicitacao nao encontrada' });
+  await supabase.from('friend_requests').update({ status: 'declined' }).eq('id', request_id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/friends/:friendId', requireAuth, async (req, res) => {
   const friendId = Number(req.params.friendId);
-
-  db.prepare(`
-    DELETE FROM friendships
-    WHERE (user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?)
-  `).run(req.session.userId, friendId, friendId, req.session.userId);
-
+  await supabase.from('friendships').delete()
+    .or(`and(user1_id.eq.${req.session.userId},user2_id.eq.${friendId}),and(user1_id.eq.${friendId},user2_id.eq.${req.session.userId})`);
   res.json({ ok: true });
 });
 
-app.get('/api/friends', requireAuth, (req, res) => {
-  const friends = db.prepare(`
-    SELECT u.id, u.serial_id, u.username, u.display_name, u.avatar, u.banner
-    FROM friendships f
-    JOIN users u ON u.id = CASE WHEN f.user1_id = ? THEN f.user2_id ELSE f.user1_id END
-    WHERE f.user1_id = ? OR f.user2_id = ?
-  `).all(req.session.userId, req.session.userId, req.session.userId);
+app.get('/api/friends', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  const { data: friends } = await supabase
+    .from('friendships')
+    .select(`user1_id, user2_id, user1:user1_id(id, serial_id, username, display_name, avatar, banner, status), user2:user2_id(id, serial_id, username, display_name, avatar, banner, status)`)
+    .or(`user1_id.eq.${uid},user2_id.eq.${uid}`);
+  const { data: metas } = await supabase.from('friend_meta').select('friend_id, nickname, note').eq('owner_id', uid);
+  const metaMap = Object.fromEntries((metas || []).map(m => [m.friend_id, m]));
+  const { data: unread } = await supabase.from('messages').select('sender_id, count').eq('receiver_id', uid).is('read_at', null).is('deleted_at', null).order('sender_id');
+  const unreadMap = {};
+  (unread || []).forEach(r => { unreadMap[r.sender_id] = (unreadMap[r.sender_id] || 0) + 1; });
+  const list = (friends || []).map(f => {
+    const friend = f.user1_id === uid ? f.user2 : f.user1;
+    if (!friend) return null;
+    const meta = metaMap[friend.id] || {};
+    return { ...friend, nickname: meta.nickname, note: meta.note, unread_count: unreadMap[friend.id] || 0 };
+  }).filter(Boolean);
+  res.json({ friends: list });
+});
 
-  res.json({ friends });
+app.put('/api/friends/:friendId/meta', requireAuth, async (req, res) => {
+  const friendId = Number(req.params.friendId);
+  const { nickname, note } = req.body;
+  if (!await areFriends(req.session.userId, friendId)) return res.status(403).json({ error: 'Nao sao amigos' });
+  await supabase.from('friend_meta').upsert({ owner_id: req.session.userId, friend_id: friendId, nickname: nickname || null, note: note || null }, { onConflict: 'owner_id,friend_id' });
+  res.json({ ok: true });
 });
 
 // ---------- Mensagens ----------
+const MESSAGES_PAGE_SIZE = 30;
 
-app.get('/api/messages/:friendId', requireAuth, (req, res) => {
+app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
   const friendId = Number(req.params.friendId);
+  const before = req.query.before ? Number(req.query.before) : null;
+  if (!await areFriends(req.session.userId, friendId)) return res.status(403).json({ error: 'Nao sao amigos' });
 
-  if (!areFriends(req.session.userId, friendId)) {
-    return res.status(403).json({ error: 'Voces nao sao amigos' });
+  let query = supabase.from('messages').select('*')
+    .or(`and(sender_id.eq.${req.session.userId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${req.session.userId})`)
+    .order('id', { ascending: false })
+    .limit(MESSAGES_PAGE_SIZE);
+  if (before) query = query.lt('id', before);
+  
+  const { data: rows } = await query;
+  rows.reverse();
+
+  if (!before) {
+    await supabase.from('messages').update({ read_at: new Date().toISOString() })
+      .eq('sender_id', friendId).eq('receiver_id', req.session.userId).is('read_at', null);
+    io.to('user:' + friendId).emit('messages_read', { by: req.session.userId });
   }
-
-  const messages = db.prepare(`
-    SELECT * FROM messages
-    WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-    ORDER BY id ASC
-  `).all(req.session.userId, friendId, friendId, req.session.userId);
-
-  res.json({ messages });
+  res.json({ messages: rows, has_more: rows.length === MESSAGES_PAGE_SIZE });
 });
 
-app.post('/api/messages', requireAuth, (req, res) => {
+app.post('/api/messages', requireAuth, async (req, res) => {
   const { receiver_id, content } = req.body;
+  if (!content || !content.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
+  if (!await areFriends(req.session.userId, receiver_id)) return res.status(403).json({ error: 'Nao sao amigos' });
+  if (await isBlocked(req.session.userId, receiver_id)) return res.status(403).json({ error: 'Bloqueado' });
 
-  if (!content || !content.trim()) {
-    return res.status(400).json({ error: 'Mensagem vazia' });
-  }
-  if (!areFriends(req.session.userId, receiver_id)) {
-    return res.status(403).json({ error: 'Voces nao sao amigos' });
-  }
+  const { data: message } = await supabase.from('messages')
+    .insert({ sender_id: req.session.userId, receiver_id: receiver_id, content: content.trim() })
+    .select().single();
 
-  const info = db.prepare(`
-    INSERT INTO messages (sender_id, receiver_id, content) VALUES (?, ?, ?)
-  `).run(req.session.userId, receiver_id, content.trim());
-
-  const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid);
-
-  // Entrega em tempo real para o destinatario, se estiver online.
   io.to('user:' + receiver_id).emit('new_message', message);
-
   res.json({ message });
 });
 
-// ---------- Socket.io (status online + entrega em tempo real) ----------
+app.put('/api/messages/:id', requireAuth, async (req, res) => {
+  const { content } = req.body;
+  const { data: message } = await supabase.from('messages').select('*').eq('id', Number(req.params.id)).maybeSingle();
+  if (!message || message.sender_id !== req.session.userId) return res.status(404).json({ error: 'Nao encontrada' });
+  if (message.deleted_at) return res.status(400).json({ error: 'Mensagem apagada' });
+  if (!content || !content.trim()) return res.status(400).json({ error: 'Vazia' });
 
-const onlineUsers = new Map(); // userId -> quantidade de conexoes abertas
+  const { data: updated } = await supabase.from('messages')
+    .update({ content: content.trim(), edited_at: new Date().toISOString() }).eq('id', message.id)
+    .select().single();
+
+  io.to('user:' + message.receiver_id).emit('message_updated', updated);
+  io.to('user:' + message.sender_id).emit('message_updated', updated);
+  res.json({ message: updated });
+});
+
+app.delete('/api/messages/:id', requireAuth, async (req, res) => {
+  const { data: message } = await supabase.from('messages').select('*').eq('id', Number(req.params.id)).maybeSingle();
+  if (!message || message.sender_id !== req.session.userId) return res.status(404).json({ error: 'Nao encontrada' });
+
+  await supabase.from('messages').update({ content: '', image: null, deleted_at: new Date().toISOString() }).eq('id', message.id);
+  if (message.image) await deleteOldUpload(message.image);
+
+  const { data: updated } = await supabase.from('messages').select('*').eq('id', message.id).maybeSingle();
+  io.to('user:' + message.receiver_id).emit('message_updated', updated);
+  io.to('user:' + message.sender_id).emit('message_updated', updated);
+  res.json({ ok: true });
+});
+
+// ---------- Servidores ----------
+app.post('/api/servers', requireAuth, async (req, res) => {
+  const { name } = req.body;
+  if (!name || name.trim().length < 3) return res.status(400).json({ error: 'Nome do servidor muito curto' });
+  
+  const inviteCode = Math.random().toString(36).substring(2, 10);
+  const { data: server, error } = await supabase.from('servers')
+    .insert({ name: name.trim(), owner_id: req.session.userId, invite_code: inviteCode })
+    .select().single();
+  
+  if (error) return res.status(500).json({ error: 'Erro ao criar servidor' });
+  
+  await supabase.from('server_members').insert({ server_id: server.id, user_id: req.session.userId });
+  
+  const { data: role } = await supabase.from('server_roles')
+    .insert({ server_id: server.id, name: '@everyone', color: '#99aab5', position: 0 })
+    .select().single();
+  await supabase.from('server_member_roles').insert({ server_id: server.id, user_id: req.session.userId, role_id: role.id });
+
+  await supabase.from('server_channels').insert({ server_id: server.id, name: 'geral', position: 0 });
+  
+  res.json({ server });
+});
+
+app.post('/api/servers/join', requireAuth, async (req, res) => {
+  const { invite_code } = req.body;
+  const { data: server } = await supabase.from('servers').select('*').eq('invite_code', invite_code.trim()).maybeSingle();
+  if (!server) return res.status(404).json({ error: 'Servidor nao encontrado' });
+  
+  const { data: existing } = await supabase.from('server_members').select('id')
+    .eq('server_id', server.id).eq('user_id', req.session.userId).maybeSingle();
+  if (existing) return res.status(409).json({ error: 'Voce ja esta nesse servidor' });
+  
+  await supabase.from('server_members').insert({ server_id: server.id, user_id: req.session.userId });
+  const { data: everyoneRole } = await supabase.from('server_roles').select('id').eq('server_id', server.id).eq('name', '@everyone').maybeSingle();
+  if (everyoneRole) {
+    await supabase.from('server_member_roles').insert({ server_id: server.id, user_id: req.session.userId, role_id: everyoneRole.id });
+  }
+  res.json({ server });
+});
+
+app.get('/api/servers', requireAuth, async (req, res) => {
+  const { data: members } = await supabase.from('server_members')
+    .select('server_id, servers:servers!server_members_server_id_fkey(*)')
+    .eq('user_id', req.session.userId);
+  const servers = (members || []).map(m => m.servers).filter(Boolean);
+  res.json({ servers });
+});
+
+app.put('/api/servers/:id', requireAuth, async (req, res) => {
+  const serverId = Number(req.params.id);
+  const { name } = req.body;
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
+  if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+  
+  await supabase.from('servers').update({ name: name.trim() }).eq('id', serverId);
+  const { data: updated } = await supabase.from('servers').select('*').eq('id', serverId).maybeSingle();
+  res.json({ server: updated });
+});
+
+app.post('/api/servers/:id/icon', requireAuth, upload.single('icon'), async (req, res) => {
+  const serverId = Number(req.params.id);
+  try {
+    const { data: server } = await supabase.from('servers').select('owner_id, icon_url').eq('id', serverId).maybeSingle();
+    if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo' });
+
+    if (server.icon_url) await deleteOldUpload(server.icon_url);
+    const fileName = `server-${serverId}-${Date.now()}${path.extname(req.file.originalname) || '.png'}`;
+    const publicUrl = await uploadToSupabase('servers', req.file.buffer, fileName, req.file.mimetype);
+    
+    await supabase.from('servers').update({ icon_url: publicUrl }).eq('id', serverId);
+    const { data: updated } = await supabase.from('servers').select('*').eq('id', serverId).maybeSingle();
+    res.json({ server: updated });
+  } catch (error) {
+    console.error('Erro no upload do ícone:', error);
+    res.status(500).json({ error: 'Erro ao salvar imagem. Verifique se o bucket "servers" existe no Supabase.' });
+  }
+});
+
+app.get('/api/servers/:id/data', requireAuth, async (req, res) => {
+  const serverId = Number(req.params.id);
+  const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
+  if (!member) return res.status(403).json({ error: 'Voce nao esta nesse servidor' });
+
+  const { data: channels } = await supabase.from('server_channels').select('*').eq('server_id', serverId).order('position', { ascending: true });
+  const { data: roles } = await supabase.from('server_roles').select('*').eq('server_id', serverId).order('position', { ascending: true });
+  const { data: members } = await supabase.from('server_members')
+    .select('user_id, users:user_id(id, username, display_name, avatar)')
+    .eq('server_id', serverId);
+  const { data: memberRoles } = await supabase.from('server_member_roles').select('user_id, role_id').eq('server_id', serverId);
+  const { data: overrides } = await supabase.from('channel_role_permissions').select('channel_id, role_id, can_send_messages').in('channel_id', (channels || []).map(c => c.id));
+
+  res.json({ channels, roles, members, memberRoles, overrides });
+});
+
+app.post('/api/servers/:id/channels', requireAuth, async (req, res) => {
+  const serverId = Number(req.params.id);
+  const { name } = req.body;
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
+  if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+  
+  const { data: channel, error } = await supabase.from('server_channels')
+    .insert({ server_id: serverId, name: name.trim().toLowerCase().replace(/\s+/g, '-') })
+    .select().single();
+  if (error) return res.status(500).json({ error: 'Erro ao criar canal' });
+  res.json({ channel });
+});
+
+app.post('/api/servers/:id/roles', requireAuth, async (req, res) => {
+  const serverId = Number(req.params.id);
+  const { name, color } = req.body;
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
+  if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+
+  const { data: role, error } = await supabase.from('server_roles')
+    .insert({ server_id: serverId, name: name.trim(), color: color || '#99aab5' })
+    .select().single();
+  if (error) return res.status(500).json({ error: 'Erro ao criar cargo' });
+  res.json({ role });
+});
+
+app.post('/api/servers/:id/roles/assign', requireAuth, async (req, res) => {
+  const serverId = Number(req.params.id);
+  const { user_id, role_id } = req.body;
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
+  if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+
+  await supabase.from('server_member_roles').upsert({ server_id: serverId, user_id, role_id });
+  res.json({ ok: true });
+});
+
+app.post('/api/servers/:id/roles/revoke', requireAuth, async (req, res) => {
+  const serverId = Number(req.params.id);
+  const { user_id, role_id } = req.body;
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
+  if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'No permission' });
+
+  await supabase.from('server_member_roles').delete()
+    .eq('server_id', serverId).eq('user_id', user_id).eq('role_id', role_id);
+  res.json({ ok: true });
+});
+
+app.put('/api/channels/:id/permissions', requireAuth, async (req, res) => {
+  const channelId = Number(req.params.id);
+  const { role_id, can_send_messages } = req.body;
+  
+  const { data: channel } = await supabase.from('server_channels').select('server_id').eq('id', channelId).maybeSingle();
+  if (!channel) return res.status(404).json({ error: 'Canal nao encontrado' });
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', channel.server_id).maybeSingle();
+  if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+
+  await supabase.from('channel_role_permissions').upsert({ 
+    channel_id: channelId, role_id, can_send_messages 
+  }, { onConflict: 'channel_id, role_id' });
+  res.json({ ok: true });
+});
+
+app.get('/api/servers/:id/channels/:channelId/messages', requireAuth, async (req, res) => {
+  const { id: serverId, channelId } = req.params;
+  const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
+  if (!member) return res.status(403).json({ error: 'Voce nao esta nesse servidor' });
+
+  const { data: messages } = await supabase.from('server_messages')
+    .select('*, users:sender_id(id, serial_id, username, display_name, avatar)')
+    .eq('server_id', serverId).eq('channel_id', channelId)
+    .order('id', { ascending: true }).limit(50);
+  res.json({ messages });
+});
+
+app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, async (req, res) => {
+  const { id: serverId, channelId } = req.params;
+  const { content } = req.body;
+  if (!content || !content.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
+  
+  const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
+  if (!member) return res.status(403).json({ error: 'Voce nao esta nesse servidor' });
+
+  const { data: userRoles } = await supabase.from('server_member_roles').select('role_id').eq('server_id', serverId).eq('user_id', req.session.userId);
+  const roleIds = (userRoles || []).map(r => r.role_id);
+  const { data: overrides } = await supabase.from('channel_role_permissions')
+    .select('can_send_messages').eq('channel_id', channelId).in('role_id', roleIds);
+    
+  const isBlocked = overrides.some(o => o.can_send_messages === false);
+  if (isBlocked) return res.status(403).json({ error: 'Voce nao tem permissao para falar neste canal' });
+
+  const { data: message } = await supabase.from('server_messages')
+    .insert({ server_id: serverId, channel_id: channelId, sender_id: req.session.userId, content: content.trim() })
+    .select('*, users:sender_id(id, serial_id, username, display_name, avatar)').single();
+  
+  io.to('server:' + serverId).emit('new_server_message', message);
+  res.json({ message });
+});
+
+// ---------- Socket.io ----------
+const onlineUsers = new Map();
+
+async function broadcastPresence(userId) {
+  const { data: user } = await supabase.from('users').select('status').eq('id', userId).maybeSingle();
+  const connected = onlineUsers.has(userId);
+  const visible = connected && user && user.status !== 'invisible';
+  io.emit('presence', { userId, online: visible, status: visible ? user.status : 'offline' });
+}
 
 io.on('connection', (socket) => {
   const userId = socket.request.session && socket.request.session.userId;
-  if (!userId) {
-    socket.disconnect();
-    return;
-  }
-
+  if (!userId) { socket.disconnect(); return; }
   socket.join('user:' + userId);
   onlineUsers.set(userId, (onlineUsers.get(userId) || 0) + 1);
-  io.emit('presence', { userId, online: true });
+  broadcastPresence(userId);
 
-  socket.on('typing', ({ to }) => {
-    io.to('user:' + to).emit('typing', { from: userId });
+  socket.on('join_server', async (serverId) => {
+    const parsedServerId = Number(serverId);
+    const { data: member } = await supabase.from('server_members').select('id')
+      .eq('server_id', parsedServerId).eq('user_id', userId).maybeSingle();
+    if (member) socket.join('server:' + parsedServerId);
   });
 
   socket.on('disconnect', () => {
     const count = (onlineUsers.get(userId) || 1) - 1;
-    if (count <= 0) {
-      onlineUsers.delete(userId);
-      io.emit('presence', { userId, online: false });
-    } else {
-      onlineUsers.set(userId, count);
-    }
+    if (count <= 0) { onlineUsers.delete(userId); broadcastPresence(userId); }
+    else onlineUsers.set(userId, count);
   });
 });
 
-app.get('/api/online/:userId', requireAuth, (req, res) => {
-  res.json({ online: onlineUsers.has(Number(req.params.userId)) });
-});
-
-server.listen(PORT, () => {
-  console.log(`PrivateChat rodando em http://localhost:${PORT}`);
-});
+server.listen(PORT, () => console.log(`PrivateChat rodando em http://localhost:${PORT}`));
