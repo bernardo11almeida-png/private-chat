@@ -239,6 +239,16 @@ app.put('/api/profile/avatar-url', requireAuth, async (req, res) => {
   res.json({ user: publicUser(updated) });
 });
 
+app.put('/api/profile/banner-url', requireAuth, async (req, res) => {
+  const { url } = req.body;
+  if (!url || !/^https?:\/\//.test(url)) return res.status(400).json({ error: 'URL invalida' });
+  const { data: current } = await supabase.from('users').select('banner').eq('id', req.session.userId).maybeSingle();
+  if (current?.banner) await deleteOldUpload(current.banner);
+  await supabase.from('users').update({ banner: url }).eq('id', req.session.userId);
+  const { data: updated } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
+  res.json({ user: publicUser(updated) });
+});
+
 app.post('/api/upload/avatar', requireAuth, (req, res) => {
   upload.single('avatar')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });

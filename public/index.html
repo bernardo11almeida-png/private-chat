@@ -199,22 +199,19 @@
               <div class="banner-preview" id="banner-preview"></div>
               <div class="upload-actions">
                 <label class="btn-secondary file-btn">Change Banner<input type="file" id="banner-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
+                <button type="button" id="banner-gif-btn" class="btn-secondary">Use GIF</button>
                 <button type="button" id="remove-banner-btn" class="btn-secondary">Remove</button>
               </div>
             </div>
-              <div class="upload-box">
-                <label class="field-label">Profile Picture</label>
-                <img id="avatar-preview" class="avatar avatar-lg" src="" alt="avatar" />
-                <div class="upload-actions">
-                  <label class="btn-secondary file-btn">Upload Photo<input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
-                  <button type="button" id="avatar-gif-btn" class="btn-secondary">Use GIF</button>
-                  <button type="button" id="remove-avatar-btn" class="btn-secondary">Remove</button>
-                </div>
-                <div id="avatar-gif-row" class="hidden" style="display:flex; gap:6px; margin-top:8px;">
-                  <input type="text" id="avatar-gif-url" placeholder="Cole a URL do GIF..." style="flex:1;" />
-                  <button type="button" id="avatar-gif-confirm">OK</button>
-                </div>
+            <div class="upload-box">
+              <label class="field-label">Profile Picture</label>
+              <img id="avatar-preview" class="avatar avatar-lg" src="" alt="avatar" />
+              <div class="upload-actions">
+                <label class="btn-secondary file-btn">Upload Photo<input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
+                <button type="button" id="avatar-gif-btn" class="btn-secondary">Use GIF</button>
+                <button type="button" id="remove-avatar-btn" class="btn-secondary">Remove</button>
               </div>
+            </div>
           </div>
           <p class="form-error" id="upload-error"></p>
           <form id="settings-form">
@@ -355,6 +352,21 @@
         <select id="perm-channel-select" style="width: 100%; padding: 10px; background: var(--bg-elevated-2); border: 1px solid var(--border); color: var(--text);"></select>
       </div>
       <ul id="channel-permissions-list" class="simple-list"></ul>
+    </div>
+  </div>
+
+  <!-- ===== GIF Picker Modal (Avatar/Banner) ===== -->
+  <div id="gif-select-modal" class="modal-backdrop hidden">
+    <div class="profile-modal-card" style="width:360px; text-align:left; padding:18px;">
+      <button id="gif-select-close" class="modal-close">✖</button>
+      <h3 id="gif-select-title" style="margin-top:0;">Choose a GIF</h3>
+      <div class="gif-tabs">
+        <button type="button" class="gif-tab-btn active" data-gif-select-tab="search">Search</button>
+        <button type="button" class="gif-tab-btn" data-gif-select-tab="fav">Favorites</button>
+      </div>
+      <input type="text" id="gif-select-search-input" class="gif-search" placeholder="Search GIFs..." />
+      <div id="gif-select-grid" class="gif-grid" style="height:260px;"></div>
+      <p class="form-error" id="gif-select-error"></p>
     </div>
   </div>
 

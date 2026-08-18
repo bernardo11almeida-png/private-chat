@@ -133,6 +133,9 @@ async function init() {
   setupChatForm();
   setupProfileModal();
   setupServersView();
+  setupProfileModal();
+  setupGifSelectModal();
+  setupServersView();
 
   try {
     const { user } = await api('/me');
@@ -473,6 +476,85 @@ function setupUsersView() {
   });
 }
 
+// ---------- GIF Picker para Avatar/Banner ----------
+let gifSelectTarget = null;
+
+function setupGifSelectModal() {
+  document.getElementById('gif-select-close').addEventListener('click', closeGifSelectModal);
+  document.getElementById('gif-select-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'gif-select-modal') closeGifSelectModal();
+  });
+
+  document.querySelectorAll('[data-gif-select-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-gif-select-tab]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadGifSelectTab(btn.dataset.gifSelectTab);
+    });
+  });
+
+  let searchTimeout;
+  document.getElementById('gif-select-search-input').addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => loadGifSelectTab('search', e.target.value), 500);
+  });
+}
+
+function openGifSelectModal(target) {
+  gifSelectTarget = target;
+  document.getElementById('gif-select-title').textContent = target === 'avatar' ? 'Choose a GIF avatar' : 'Choose a GIF banner';
+  document.getElementById('gif-select-error').textContent = '';
+  document.getElementById('gif-select-search-input').value = '';
+  document.querySelectorAll('[data-gif-select-tab]').forEach(b => b.classList.toggle('active', b.dataset.gifSelectTab === 'search'));
+  document.getElementById('gif-select-modal').classList.remove('hidden');
+  loadGifSelectTab('search');
+}
+
+function closeGifSelectModal() {
+  document.getElementById('gif-select-modal').classList.add('hidden');
+  gifSelectTarget = null;
+}
+
+async function loadGifSelectTab(tab, query = 'hello') {
+  const grid = document.getElementById('gif-select-grid');
+  grid.innerHTML = '<p class="muted small">Loading...</p>';
+  try {
+    let gifs = [];
+    if (tab === 'search') {
+      const res = await api(`/gifs/search?q=${encodeURIComponent(query)}`);
+      gifs = res.gifs || [];
+    } else {
+      const res = await api('/gifs/favorites');
+      gifs = res.gifs || [];
+    }
+    grid.innerHTML = '';
+    if (gifs.length === 0) { grid.innerHTML = '<p class="muted small">No GIFs found.</p>'; return; }
+    gifs.forEach(url => {
+      const img = document.createElement('img');
+      img.src = url;
+      img.onclick = () => confirmGifSelect(url);
+      grid.appendChild(img);
+    });
+  } catch (err) {
+    grid.innerHTML = `<p class="form-error">${err.message}</p>`;
+  }
+}
+
+async function confirmGifSelect(url) {
+  const target = gifSelectTarget;
+  if (!target) return;
+  try {
+    const endpoint = target === 'avatar' ? '/profile/avatar-url' : '/profile/banner-url';
+    const { user } = await api(endpoint, { method: 'PUT', body: JSON.stringify({ url }) });
+    currentUser = user;
+    renderProfile();
+    fillSettingsForm();
+    closeGifSelectModal();
+  } catch (err) {
+    document.getElementById('gif-select-error').textContent = err.message;
+  }
+}
+
 // ---------- Settings ----------
 function setupSettingsView() {
   document.getElementById('settings-form').addEventListener('submit', async (e) => {
@@ -507,19 +589,8 @@ function setupSettingsView() {
     e.target.value = '';
   });
 
-  document.getElementById('avatar-gif-btn').addEventListener('click', () => {
-    document.getElementById('avatar-gif-row').classList.toggle('hidden');
-  });
-  document.getElementById('avatar-gif-confirm').addEventListener('click', async () => {
-    const url = document.getElementById('avatar-gif-url').value.trim();
-    if (!url) return;
-    try {
-      const { user } = await api('/profile/avatar-url', { method: 'PUT', body: JSON.stringify({ url }) });
-      currentUser = user; renderProfile(); fillSettingsForm();
-      document.getElementById('avatar-gif-row').classList.add('hidden');
-      document.getElementById('avatar-gif-url').value = '';
-    } catch (err) { document.getElementById('upload-error').textContent = err.message; }
-  });
+  document.getElementById('avatar-gif-btn').addEventListener('click', () => openGifSelectModal('avatar'));
+  document.getElementById('banner-gif-btn').addEventListener('click', () => openGifSelectModal('banner'));
 }
 
 function fillSettingsForm() {
