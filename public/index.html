@@ -202,14 +202,19 @@
                 <button type="button" id="remove-banner-btn" class="btn-secondary">Remove</button>
               </div>
             </div>
-            <div class="upload-box">
-              <label class="field-label">Profile Picture</label>
-              <img id="avatar-preview" class="avatar avatar-lg" src="" alt="avatar" />
-              <div class="upload-actions">
-                <label class="btn-secondary file-btn">Change Photo<input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
-                <button type="button" id="remove-avatar-btn" class="btn-secondary">Remove</button>
+              <div class="upload-box">
+                <label class="field-label">Profile Picture</label>
+                <img id="avatar-preview" class="avatar avatar-lg" src="" alt="avatar" />
+                <div class="upload-actions">
+                  <label class="btn-secondary file-btn">Upload Photo<input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
+                  <button type="button" id="avatar-gif-btn" class="btn-secondary">Use GIF</button>
+                  <button type="button" id="remove-avatar-btn" class="btn-secondary">Remove</button>
+                </div>
+                <div id="avatar-gif-row" class="hidden" style="display:flex; gap:6px; margin-top:8px;">
+                  <input type="text" id="avatar-gif-url" placeholder="Cole a URL do GIF..." style="flex:1;" />
+                  <button type="button" id="avatar-gif-confirm">OK</button>
+                </div>
               </div>
-            </div>
           </div>
           <p class="form-error" id="upload-error"></p>
           <form id="settings-form">

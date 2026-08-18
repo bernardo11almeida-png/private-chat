@@ -225,13 +225,12 @@ app.put('/api/status', requireAuth, async (req, res) => {
 });
 
 // ---------- Perfil ----------
-app.put('/api/profile', requireAuth, async (req, res) => {
-  const { display_name, bio } = req.body;
-  const { data: current } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
-  await supabase.from('users').update({
-    display_name: display_name ?? current.display_name,
-    bio: bio ?? current.bio
-  }).eq('id', req.session.userId);
+app.put('/api/profile/avatar-url', requireAuth, async (req, res) => {
+  const { url } = req.body;
+  if (!url || !/^https?:\/\//.test(url)) return res.status(400).json({ error: 'URL invalida' });
+  const { data: current } = await supabase.from('users').select('avatar').eq('id', req.session.userId).maybeSingle();
+  if (current?.avatar) await deleteOldUpload(current.avatar);
+  await supabase.from('users').update({ avatar: url }).eq('id', req.session.userId);
   const { data: updated } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
   res.json({ user: publicUser(updated) });
 });
@@ -688,19 +687,17 @@ app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, async (re
 app.get('/api/gifs/search', requireAuth, async (req, res) => {
   const { q } = req.query;
   try {
-    const response = await fetch(`https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q || 'hello')}&api_key=dc6zaTOxFJmzC&limit=24&rating=pg`);
-    const data = await response.json();
-    
-    if (data && data.data) {
-      // Pega o tamanho original ou reduzido para garantir que sempre tenha uma URL
-      const gifs = data.data.map(g => g.images?.fixed_height?.url || g.images?.original?.url).filter(Boolean);
-      res.json({ gifs });
-    } else {
-      res.json({ gifs: [] });
+    const response = await fetch(`https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q || 'hello')}&api_key=${process.env.GIPHY_API_KEY}&limit=24&rating=pg`);
+    if (!response.ok) {
+      console.error('Giphy respondeu com erro:', response.status, await response.text());
+      return res.status(502).json({ error: 'Giphy indisponivel' });
     }
-  } catch (e) { 
-    console.error('Giphy Error:', e); 
-    res.status(500).json({ error: 'Erro ao buscar GIFs' }); 
+    const data = await response.json();
+    const gifs = (data.data || []).map(g => g.images?.fixed_height?.url || g.images?.original?.url).filter(Boolean);
+    res.json({ gifs });
+  } catch (e) {
+    console.error('Giphy Error:', e);
+    res.status(500).json({ error: 'Erro ao buscar GIFs' });
   }
 });
 

@@ -506,6 +506,20 @@ function setupSettingsView() {
     try { const { user } = await api('/upload/banner', { method: 'POST', body: formData }); currentUser = user; renderProfile(); fillSettingsForm(); } catch (err) { document.getElementById('upload-error').textContent = err.message; }
     e.target.value = '';
   });
+
+  document.getElementById('avatar-gif-btn').addEventListener('click', () => {
+    document.getElementById('avatar-gif-row').classList.toggle('hidden');
+  });
+  document.getElementById('avatar-gif-confirm').addEventListener('click', async () => {
+    const url = document.getElementById('avatar-gif-url').value.trim();
+    if (!url) return;
+    try {
+      const { user } = await api('/profile/avatar-url', { method: 'PUT', body: JSON.stringify({ url }) });
+      currentUser = user; renderProfile(); fillSettingsForm();
+      document.getElementById('avatar-gif-row').classList.add('hidden');
+      document.getElementById('avatar-gif-url').value = '';
+    } catch (err) { document.getElementById('upload-error').textContent = err.message; }
+  });
 }
 
 function fillSettingsForm() {

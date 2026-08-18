@@ -1230,8 +1230,13 @@ textarea:focus {
 .gif-grid img:hover { transform: scale(1.05); border: 2px solid var(--accent); }
 
 /* ===== Mensagens com Reações ===== */
-.message-wrapper { position: relative; max-width: 70%; }
+.message-wrapper {
+  position: relative;
+  max-width: 70%;
+  width: max-content;
+}
 .message-wrapper.mine { align-self: flex-end; }
+.message-wrapper.theirs { align-self: flex-start; }
 
 .message-bubble { position: relative; }
 
