@@ -244,6 +244,45 @@ function connectSocket() {
       }
     }
   });
+    socket.on('reaction_added', (data) => {
+    // Se a mensagem estiver na tela, adiciona a reação visualmente
+    const msgEl = document.querySelector(`[data-message-id="${data.messageId}"]`);
+    if (msgEl) {
+      const container = msgEl.querySelector('.reactions-container');
+      let badge = container.querySelector(`[data-emoji="${data.emoji}"]`);
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'reaction-badge';
+        badge.dataset.emoji = data.emoji;
+        badge.innerHTML = `${data.emoji} <span>0</span>`;
+        badge.onclick = async () => {
+          try { await api(`/messages/${data.messageId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji: data.emoji }) }); } catch(e) {}
+        };
+        container.appendChild(badge);
+      }
+      const countSpan = badge.querySelector('span');
+      countSpan.textContent = parseInt(countSpan.textContent) + 1;
+      if (data.userId === currentUser.id) badge.classList.add('mine');
+    }
+  });
+
+  socket.on('reaction_removed', (data) => {
+    const msgEl = document.querySelector(`[data-message-id="${data.messageId}"]`);
+    if (msgEl) {
+      const container = msgEl.querySelector('.reactions-container');
+      let badge = container.querySelector(`[data-emoji="${data.emoji}"]`);
+      if (badge) {
+        const countSpan = badge.querySelector('span');
+        let newCount = parseInt(countSpan.textContent) - 1;
+        if (newCount <= 0) {
+          badge.remove();
+        } else {
+          countSpan.textContent = newCount;
+        }
+        if (data.userId === currentUser.id) badge.classList.remove('mine');
+      }
+    }
+  });
 }
 
 socket.on('presence', ({ userId, online }) => {
@@ -618,27 +657,86 @@ async function openChat(friend) {
 function appendMessage(message) {
   if (!activeFriend) return;
   const messagesEl = document.getElementById('chat-messages');
+  
   const wrapper = document.createElement('div');
-  wrapper.style.display = 'flex';
-  wrapper.style.gap = '10px';
-  wrapper.style.flexDirection = message.sender_id === currentUser.id ? 'row-reverse' : 'row';
-  
-  const avatar = document.createElement('img');
-  avatar.src = avatarOrDefault(message.sender_id === currentUser.id ? currentUser.avatar : activeFriend.avatar);
-  avatar.className = 'avatar';
-  avatar.style.cursor = 'pointer';
-  avatar.style.width = '32px';
-  avatar.style.height = '32px';
-  avatar.onclick = () => openProfileModal(message.sender_id, 'stranger');
-  
+  wrapper.className = 'message-wrapper ' + (message.sender_id === currentUser.id ? 'mine' : 'theirs');
+  wrapper.dataset.messageId = message.id;
+
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble ' + (message.sender_id === currentUser.id ? 'mine' : 'theirs');
-  bubble.textContent = message.content;
   
-  wrapper.appendChild(avatar);
+  // Se for um GIF (content começa com img:)
+  if (message.content.startsWith('img:')) {
+    const url = message.content.replace('img:', '');
+    bubble.innerHTML = `<img src="${url}" style="max-width:100%; border-radius:8px; display:block;" />`;
+  } else {
+    bubble.textContent = message.content;
+  }
+
+  // Botão de adicionar reação
+  const reactBtn = document.createElement('div');
+  reactBtn.className = 'add-reaction-btn';
+  reactBtn.textContent = '😀';
+  reactBtn.onclick = (e) => {
+    e.stopPropagation();
+    const picker = wrapper.querySelector('.emoji-quick-picker');
+    if (picker) picker.classList.toggle('show');
+  };
+
+  // Popup rápido de emojis
+  const emojiPicker = document.createElement('div');
+  emojiPicker.className = 'emoji-quick-picker';
+  ['👍', '❤️', '😂', '😮', '😢', '🙏'].forEach(em => {
+    const span = document.createElement('span');
+    span.textContent = em;
+    span.onclick = async () => {
+      try {
+        await api(`/messages/${message.id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji: em }) });
+        // O socket vai atualizar na tela de ambos
+      } catch(err) { console.error(err); }
+      emojiPicker.classList.remove('show');
+    };
+    emojiPicker.appendChild(span);
+  });
+
+  // Container de reações
+  const reactionsContainer = document.createElement('div');
+  reactionsContainer.className = 'reactions-container';
+
+  // Se a mensagem já tiver reações vindas do banco (ex: ao carregar histórico)
+  if (message.reactions) {
+    renderReactions(reactionsContainer, message.reactions, message.id);
+  }
+
   wrapper.appendChild(bubble);
+  wrapper.appendChild(reactBtn);
+  wrapper.appendChild(emojiPicker);
+  wrapper.appendChild(reactionsContainer);
+  
   messagesEl.appendChild(wrapper);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function renderReactions(container, reactions, messageId) {
+  container.innerHTML = '';
+  const grouped = {};
+  
+  Object.entries(reactions).forEach(([emoji, users]) => {
+    grouped[emoji] = users;
+  });
+
+  Object.entries(grouped).forEach(([emoji, users]) => {
+    const isMine = users.some(u => u.id === currentUser.id);
+    const badge = document.createElement('div');
+    badge.className = 'reaction-badge' + (isMine ? ' mine' : '');
+    badge.innerHTML = `${emoji} <span>${users.length}</span>`;
+    badge.onclick = async () => {
+      try {
+        await api(`/messages/${messageId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) });
+      } catch(err) { console.error(err); }
+    };
+    container.appendChild(badge);
+  });
 }
 
 function setupChatForm() {
@@ -653,6 +751,74 @@ function setupChatForm() {
       input.value = '';
     } catch (err) { alert(err.message); }
   });
+
+  // Lógica dos GIFs
+  const gifPicker = document.getElementById('gif-picker');
+  document.getElementById('open-gif-btn').addEventListener('click', async () => {
+    gifPicker.classList.toggle('hidden');
+    if (!gifPicker.classList.contains('hidden')) {
+      loadGifTab('search');
+    }
+  });
+
+  document.querySelectorAll('.gif-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.gif-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadGifTab(btn.dataset.gifTab);
+    });
+  });
+
+  let searchTimeout;
+  document.getElementById('gif-search-input').addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => loadGifTab('search', e.target.value), 500);
+  });
+}
+
+async function loadGifTab(tab, query = 'hello') {
+  const grid = document.getElementById('gif-grid');
+  grid.innerHTML = '<p class="muted small">Loading...</p>';
+  
+  try {
+    let gifs = [];
+    if (tab === 'search') {
+      const res = await api(`/gifs/search?q=${encodeURIComponent(query)}`);
+      gifs = res.gifs;
+    } else {
+      const res = await api('/gifs/favorites');
+      gifs = res.gifs;
+    }
+
+    grid.innerHTML = '';
+    if (gifs.length === 0) {
+      grid.innerHTML = '<p class="muted small">No GIFs found.</p>';
+      return;
+    }
+
+    gifs.forEach(url => {
+      const img = document.createElement('img');
+      img.src = url;
+      img.onclick = async () => {
+        // Envia o GIF como mensagem
+        const { message } = await api('/messages', { method: 'POST', body: JSON.stringify({ receiver_id: activeFriend.id, content: `img:${url}` }) });
+        appendMessage(message);
+        playSound('send');
+        document.getElementById('gif-picker').classList.add('hidden');
+      };
+      img.oncontextmenu = async (e) => {
+        e.preventDefault();
+        // Favoritar / Desfavoritar
+        try {
+          await api('/gifs/favorites', { method: 'POST', body: JSON.stringify({ gif_url: url }) });
+          alert('GIF favoritado!');
+        } catch(err) { alert(err.message); }
+      };
+      grid.appendChild(img);
+    });
+  } catch (err) {
+    grid.innerHTML = `<p class="form-error">${err.message}</p>`;
+  }
 }
 
 // ---------- Profile Modal ----------

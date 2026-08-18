@@ -8,6 +8,7 @@ const http = require('http');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
+const fetch = require('node-fetch');
 
 const supabase = require('./db');
 const { generateSerialId } = require('./serialId');
@@ -682,6 +683,58 @@ app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, async (re
   
   io.to('server:' + serverId).emit('new_server_message', message);
   res.json({ message });
+});
+
+// ---------- GIFs (Giphy API) ----------
+app.get('/api/gifs/search', requireAuth, async (req, res) => {
+  const { q } = req.query;
+  try {
+    // Usando a API pública do Giphy (sem necessidade de chave para poucos usos)
+    const response = await fetch(`https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q)}&api_key=dc6zaTOxFJmzC&limit=24`);
+    const data = await response.json();
+    const gifs = data.data.map(g => g.images.fixed_height_small.url);
+    res.json({ gifs });
+  } catch (e) { res.status(500).json({ error: 'Erro ao buscar GIFs' }); }
+});
+
+app.get('/api/gifs/favorites', requireAuth, async (req, res) => {
+  const { data } = await supabase.from('favorite_gifs').select('gif_url').eq('user_id', req.session.userId).order('created_at', { ascending: false });
+  res.json({ gifs: data?.map(d => d.gif_url) || [] });
+});
+
+app.post('/api/gifs/favorites', requireAuth, async (req, res) => {
+  const { gif_url } = req.body;
+  await supabase.from('favorite_gifs').upsert({ user_id: req.session.userId, gif_url }, { onConflict: 'user_id,gif_url' });
+  res.json({ ok: true });
+});
+
+app.delete('/api/gifs/favorites', requireAuth, async (req, res) => {
+  const { gif_url } = req.body;
+  await supabase.from('favorite_gifs').delete().eq('user_id', req.session.userId).eq('gif_url', gif_url);
+  res.json({ ok: true });
+});
+
+// ---------- Reações ----------
+app.post('/api/messages/:id/reactions', requireAuth, async (req, res) => {
+  const msgId = Number(req.params.id);
+  const { emoji } = req.body;
+  const { data: msg } = await supabase.from('messages').select('sender_id, receiver_id').eq('id', msgId).maybeSingle();
+  if (!msg) return res.status(404).json({ error: 'Mensagem não encontrada' });
+
+  const { data: existing } = await supabase.from('message_reactions')
+    .select('id').eq('message_id', msgId).eq('user_id', req.session.userId).eq('emoji', emoji).maybeSingle();
+
+  if (existing) {
+    await supabase.from('message_reactions').delete().eq('id', existing.id);
+    io.to('user:' + msg.sender_id).emit('reaction_removed', { messageId: msgId, emoji, userId: req.session.userId });
+    io.to('user:' + msg.receiver_id).emit('reaction_removed', { messageId: msgId, emoji, userId: req.session.userId });
+    res.json({ ok: true, action: 'removed' });
+  } else {
+    await supabase.from('message_reactions').insert({ message_id: msgId, user_id: req.session.userId, emoji });
+    io.to('user:' + msg.sender_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId, displayName: currentUser.display_name });
+    io.to('user:' + msg.receiver_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId, displayName: currentUser.display_name });
+    res.json({ ok: true, action: 'added' });
+  }
 });
 
 // ---------- Socket.io ----------

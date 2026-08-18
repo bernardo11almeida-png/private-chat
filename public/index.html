@@ -271,7 +271,19 @@
                 </div>
               </div>
               <div id="chat-messages" class="chat-messages"></div>
+              
+              <!-- Popup de GIFs -->
+              <div id="gif-picker" class="gif-picker hidden">
+                <div class="gif-tabs">
+                  <button class="gif-tab-btn active" data-gif-tab="search">Search</button>
+                  <button class="gif-tab-btn" data-gif-tab="fav">Favorites</button>
+                </div>
+                <input type="text" id="gif-search-input" class="gif-search" placeholder="Search GIFs..." />
+                <div id="gif-grid" class="gif-grid"></div>
+              </div>
+
               <form id="chat-form" class="chat-input-row">
+                <button type="button" id="open-gif-btn" class="btn-secondary">GIF</button>
                 <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" />
                 <button type="submit">➤</button>
               </form>
