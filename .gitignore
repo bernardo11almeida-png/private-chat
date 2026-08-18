@@ -1,0 +1,11 @@
+node_modules/
+database.db
+database.db-shm
+database.db-wal
+.env
+
+# mantem as pastas de upload no git, mas ignora os arquivos enviados
+public/uploads/avatars/*
+public/uploads/banners/*
+!public/uploads/avatars/.gitkeep
+!public/uploads/banners/.gitkeep

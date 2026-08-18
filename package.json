@@ -1,0 +1,17 @@
+{
+  "name": "private-chat",
+  "version": "0.1.0",
+  "description": "Prototipo simples de plataforma de chat privada (base para expansao futura)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "multer": "^2.0.1",
+    "socket.io": "^4.7.5"
+  }
+}
