@@ -1336,3 +1336,52 @@ textarea:focus {
 }
 
 .gif-fav-btn:hover { background: var(--accent); }
+
+/* Ações nas Mensagens (Hover) */
+.message-wrapper, .server-message { position: relative; }
+.message-actions { 
+  position: absolute; 
+  top: -12px; 
+  right: 10px; 
+  background: var(--bg-elevated); 
+  border: 1px solid var(--border); 
+  border-radius: 4px; 
+  display: none; 
+  gap: 2px; 
+  z-index: 5; 
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+}
+.message-wrapper:hover .message-actions, .server-message:hover .message-actions { display: flex; }
+.message-actions button { background: transparent; border: none; color: var(--text-muted); padding: 4px 6px; cursor: pointer; font-size: 14px; }
+.message-actions button:hover { color: var(--text); }
+.message-actions button.delete-btn:hover { color: var(--danger); }
+
+.server-message .message-actions { top: 4px; right: 4px; }
+
+/* Citação de Reply */
+.reply-quote { 
+  border-left: 3px solid var(--accent); 
+  padding: 2px 8px; 
+  margin-bottom: 4px; 
+  font-size: 12px; 
+  color: var(--text-muted); 
+  cursor: pointer; 
+  background: rgba(0,0,0,0.1);
+  border-radius: 0 4px 4px 0;
+}
+.reply-quote strong { color: var(--text); }
+
+/* Barra de Reply (embaixo do input) */
+.reply-context { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  padding: 8px 16px; 
+  background: var(--bg-elevated-2); 
+  border-top: 1px solid var(--border); 
+  border-bottom: 1px solid var(--border); 
+  font-size: 13px;
+}
+.reply-context.hidden { display: none; }
+
+.deleted-msg { font-style: italic; color: var(--text-muted); opacity: 0.7; }

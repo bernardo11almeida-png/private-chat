@@ -175,6 +175,13 @@
                 <div class="server-conversation">
                   <div class="channel-heading"><span>#</span><strong id="active-channel-name">general</strong></div>
                   <div id="server-chat-messages" class="server-chat-messages"></div>
+                  <div id="reply-context-server" class="reply-context hidden">
+                    <div>
+                      <small>Replying to <strong id="reply-to-name-server"></strong></small>
+                      <div id="reply-to-content-server" class="muted small"></div>
+                    </div>
+                    <button type="button" id="cancel-reply-btn-server" class="btn-secondary" style="padding: 4px 8px;">✖</button>
+                  </div>
                   <form id="server-chat-form" class="chat-input-row">
                     <input type="text" id="server-chat-input" maxlength="4000" placeholder="Message" autocomplete="off" />
                     <button type="submit" aria-label="Send message">➤</button>
@@ -283,6 +290,14 @@
                 </div>
                 <input type="text" id="gif-search-input" class="gif-search" placeholder="Search GIFs..." />
                 <div id="gif-grid" class="gif-grid"></div>
+              </div>
+
+              <div id="reply-context-dm" class="reply-context hidden">
+                <div>
+                  <small>Replying to <strong id="reply-to-name-dm"></strong></small>
+                  <div id="reply-to-content-dm" class="muted small"></div>
+                </div>
+                <button type="button" id="cancel-reply-btn-dm" class="btn-secondary" style="padding: 4px 8px;">✖</button>
               </div>
 
               <form id="chat-form" class="chat-input-row">

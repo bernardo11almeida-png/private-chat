@@ -9,6 +9,8 @@ let activeServer = null;
 let cachedServers = [];
 let activeChannel = null;
 let serverDataCache = null;
+let replyDM = null;
+let replyServer = null;
 
 let audioCtx = null;
 
@@ -225,23 +227,23 @@ function connectSocket() {
     updateUnreadBadges();
   });
 
-socket.on('presence', ({ userId, online }) => {
-  if (online) onlineFriendIds.add(userId); else onlineFriendIds.delete(userId);
-  updateOnlineIndicators();
-});
-socket.on('new_server_message', (message) => {
-  if (activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id) {
-    appendServerMessage(message);
-    if (message.sender_id !== currentUser.id && !document.hasFocus()) {
-      playSound('receive');
+  socket.on('presence', ({ userId, online }) => {
+    if (online) onlineFriendIds.add(userId); else onlineFriendIds.delete(userId);
+    updateOnlineIndicators();
+  });
+  socket.on('new_server_message', (message) => {
+    if (activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id) {
+      appendServerMessage(message);
+      if (message.sender_id !== currentUser.id && !document.hasFocus()) {
+        playSound('receive');
+      }
+    } else {
+      if (message.sender_id !== currentUser.id) {
+        playSound('receive');
+        showNotification(message.users?.display_name || 'Server Message', `#${activeChannel?.name || 'channel'}: ${message.content}`, avatarOrDefault(message.users?.avatar));
+      }
     }
-  } else {
-    if (message.sender_id !== currentUser.id) {
-      playSound('receive');
-      showNotification(message.users?.display_name || 'Server Message', `#${activeChannel?.name || 'channel'}: ${message.content}`, avatarOrDefault(message.users?.avatar));
-    }
-  }
-});
+  });
 
     socket.on('reaction_added', (data) => {
     // Se a mensagem estiver na tela, adiciona a reação visualmente
@@ -280,6 +282,34 @@ socket.on('new_server_message', (message) => {
         }
         if (data.userId === currentUser.id) badge.classList.remove('mine');
       }
+    }
+  });
+
+    socket.on('message_deleted', (data) => {
+    const msgEl = document.querySelector(`[data-message-id="${data.messageId}"]`);
+    if (msgEl) {
+      const bubble = msgEl.querySelector('.message-bubble');
+      if (bubble) {
+        bubble.classList.add('deleted-msg');
+        bubble.textContent = 'Mensagem apagada';
+      }
+      const actions = msgEl.querySelector('.message-actions');
+      if (actions) actions.remove();
+      msgEl.dataset.content = '';
+    }
+  });
+
+  socket.on('server_message_deleted', (data) => {
+    const msgEl = document.querySelector(`[data-message-id="${data.messageId}"]`);
+    if (msgEl) {
+      const contentEl = msgEl.querySelector('.server-message-content');
+      if (contentEl) {
+        contentEl.classList.add('deleted-msg');
+        contentEl.textContent = 'Mensagem apagada';
+      }
+      const actions = msgEl.querySelector('.message-actions');
+      if (actions) actions.remove();
+      msgEl.dataset.content = '';
     }
   });
 }
@@ -721,62 +751,100 @@ function appendMessage(message) {
   if (!activeFriend) return;
   const messagesEl = document.getElementById('chat-messages');
   
-  const wrapper = document.createElement('div');
-  wrapper.className = 'message-wrapper ' + (message.sender_id === currentUser.id ? 'mine' : 'theirs');
-  wrapper.dataset.messageId = message.id;
+  let wrapper = messagesEl.querySelector(`[data-message-id="${message.id}"]`);
+  if (!wrapper) {
+    wrapper = document.createElement('div');
+    wrapper.className = 'message-wrapper ' + (message.sender_id === currentUser.id ? 'mine' : 'theirs');
+    wrapper.dataset.messageId = message.id;
+    messagesEl.appendChild(wrapper);
+  } else {
+    wrapper.innerHTML = '';
+  }
+
+  if (message.reply_to) {
+    const original = messagesEl.querySelector(`[data-message-id="${message.reply_to}"]`);
+    const quote = document.createElement('div');
+    quote.className = 'reply-quote';
+    if (original) {
+      const isMine = original.classList.contains('mine');
+      const origAuthor = isMine ? currentUser.display_name : activeFriend.display_name;
+      const origContent = original.dataset.content || '';
+      quote.innerHTML = `<strong>${escapeHtml(origAuthor)}</strong> ${escapeHtml(origContent.substring(0, 50))}`;
+      quote.onclick = () => original.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      quote.innerHTML = `<strong>Original message unavailable</strong>`;
+    }
+    wrapper.appendChild(quote);
+  }
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble ' + (message.sender_id === currentUser.id ? 'mine' : 'theirs');
   
-  // Se for um GIF (content começa com img:)
-  if (message.content.startsWith('img:')) {
+  if (message.deleted_at) {
+    bubble.classList.add('deleted-msg');
+    bubble.textContent = 'Mensagem apagada';
+  } else if (message.content.startsWith('img:')) {
     const url = message.content.replace('img:', '');
     bubble.innerHTML = `<img src="${url}" style="max-width:100%; border-radius:8px; display:block;" />`;
+    wrapper.dataset.content = "GIF";
   } else {
     bubble.textContent = message.content;
+    wrapper.dataset.content = message.content;
   }
-
-  // Botão de adicionar reação
-  const reactBtn = document.createElement('div');
-  reactBtn.className = 'add-reaction-btn';
-  reactBtn.textContent = '😀';
-  reactBtn.onclick = (e) => {
-    e.stopPropagation();
-    const picker = wrapper.querySelector('.emoji-quick-picker');
-    if (picker) picker.classList.toggle('show');
-  };
-
-  // Popup rápido de emojis
-  const emojiPicker = document.createElement('div');
-  emojiPicker.className = 'emoji-quick-picker';
-  ['👍', '❤️', '😂', '😮', '😢', '🙏'].forEach(em => {
-    const span = document.createElement('span');
-    span.textContent = em;
-    span.onclick = async () => {
-      try {
-        await api(`/messages/${message.id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji: em }) });
-        // O socket vai atualizar na tela de ambos
-      } catch(err) { console.error(err); }
-      emojiPicker.classList.remove('show');
-    };
-    emojiPicker.appendChild(span);
-  });
-
-  // Container de reações
-  const reactionsContainer = document.createElement('div');
-  reactionsContainer.className = 'reactions-container';
-
-  // Se a mensagem já tiver reações vindas do banco (ex: ao carregar histórico)
-  if (message.reactions) {
-    renderReactions(reactionsContainer, message.reactions, message.id);
-  }
-
   wrapper.appendChild(bubble);
-  wrapper.appendChild(reactBtn);
-  wrapper.appendChild(emojiPicker);
-  wrapper.appendChild(reactionsContainer);
+
+  if (!message.deleted_at) {
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+
+    const reactBtn = document.createElement('button');
+    reactBtn.innerHTML = '😀';
+    reactBtn.onclick = (e) => {
+      e.stopPropagation();
+      const picker = wrapper.querySelector('.emoji-quick-picker');
+      if (picker) picker.classList.toggle('show');
+    };
+    actions.appendChild(reactBtn);
+
+    const replyBtn = document.createElement('button');
+    replyBtn.innerHTML = '↩';
+    replyBtn.title = 'Reply';
+    replyBtn.onclick = () => setReplyDM(message);
+    actions.appendChild(replyBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'delete-btn';
+    delBtn.innerHTML = '🗑';
+    delBtn.title = 'Delete';
+    delBtn.onclick = async () => {
+      if (confirm('Delete this message?')) {
+        try { await api(`/messages/${message.id}`, { method: 'DELETE' }); } catch(e) { alert(e.message); }
+      }
+    };
+    actions.appendChild(delBtn);
+
+    const emojiPicker = document.createElement('div');
+    emojiPicker.className = 'emoji-quick-picker';
+    ['👍', '❤️', '😂', '😮', '😢', '🙏'].forEach(em => {
+      const span = document.createElement('span');
+      span.textContent = em;
+      span.onclick = async () => {
+        try { await api(`/messages/${message.id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji: em }) }); } catch(err) {}
+        emojiPicker.classList.remove('show');
+      };
+      emojiPicker.appendChild(span);
+    });
+
+    const reactionsContainer = document.createElement('div');
+    reactionsContainer.className = 'reactions-container';
+    if (message.reactions) renderReactions(reactionsContainer, message.reactions, message.id);
+
+    wrapper.appendChild(reactBtn); // mantém o botão flutuante antigo se precisar
+    wrapper.appendChild(actions);
+    wrapper.appendChild(emojiPicker);
+    wrapper.appendChild(reactionsContainer);
+  }
   
-  messagesEl.appendChild(wrapper);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
@@ -808,22 +876,23 @@ function setupChatForm() {
     const input = document.getElementById('chat-input');
     if (!input.value.trim()) return;
     try {
-      const { message } = await api('/messages', { method: 'POST', body: JSON.stringify({ receiver_id: activeFriend.id, content: input.value }) });
+      const { message } = await api('/messages', { method: 'POST', body: JSON.stringify({ receiver_id: activeFriend.id, content: input.value, reply_to: replyDM?.id }) });
       appendMessage(message); 
       playSound('send');
       input.value = '';
+      cancelReplyDM();
     } catch (err) { alert(err.message); }
   });
 
-  // Lógica dos GIFs
+  document.getElementById('cancel-reply-btn-dm').addEventListener('click', cancelReplyDM);
+  document.getElementById('cancel-reply-btn-server').addEventListener('click', cancelReplyServer);
+
+  // Lógica dos GIFs (mantém o que já tinha)
   const gifPicker = document.getElementById('gif-picker');
   document.getElementById('open-gif-btn').addEventListener('click', async () => {
     gifPicker.classList.toggle('hidden');
-    if (!gifPicker.classList.contains('hidden')) {
-      loadGifTab('search');
-    }
+    if (!gifPicker.classList.contains('hidden')) loadGifTab('search');
   });
-
   document.querySelectorAll('.gif-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.gif-tab-btn').forEach(b => b.classList.remove('active'));
@@ -831,12 +900,37 @@ function setupChatForm() {
       loadGifTab(btn.dataset.gifTab);
     });
   });
-
   let searchTimeout;
   document.getElementById('gif-search-input').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => loadGifTab('search', e.target.value), 500);
   });
+}
+
+function setReplyDM(message) {
+  replyDM = message;
+  document.getElementById('reply-to-name-dm').textContent = message.sender_id === currentUser.id ? 'Yourself' : activeFriend.display_name;
+  document.getElementById('reply-to-content-dm').textContent = message.content.substring(0, 50);
+  document.getElementById('reply-context-dm').classList.remove('hidden');
+  document.getElementById('chat-input').focus();
+}
+
+function cancelReplyDM() {
+  replyDM = null;
+  document.getElementById('reply-context-dm').classList.add('hidden');
+}
+
+function setReplyServer(message) {
+  replyServer = message;
+  document.getElementById('reply-to-name-server').textContent = message.users?.display_name || 'User';
+  document.getElementById('reply-to-content-server').textContent = message.content.substring(0, 50);
+  document.getElementById('reply-context-server').classList.remove('hidden');
+  document.getElementById('server-chat-input').focus();
+}
+
+function cancelReplyServer() {
+  replyServer = null;
+  document.getElementById('reply-context-server').classList.add('hidden');
 }
 
 async function loadGifTab(tab, query = 'hello') {
@@ -1081,12 +1175,23 @@ function renderChannels(channels) {
 
 function appendServerMessage(message) {
   const msgEl = document.getElementById('server-chat-messages');
-  const isMe = message.sender_id === currentUser.id;
-  const author = message.users?.display_name || 'User';
-  
-  const div = document.createElement('div');
-  div.className = 'server-message' + (isMe ? ' mine' : '');
-  
+  let div = msgEl.querySelector(`[data-message-id="${message.id}"]`);
+  if (!div) {
+    div = document.createElement('div');
+    div.className = 'server-message' + (message.sender_id === currentUser.id ? ' mine' : '');
+    div.dataset.messageId = message.id;
+    msgEl.appendChild(div);
+  } else {
+    div.innerHTML = '';
+  }
+
+  let canDelete = message.sender_id === currentUser.id || activeServer.owner_id === currentUser.id;
+  if (!canDelete && serverDataCache) {
+    const userRoleIds = serverDataCache.memberRoles.filter(mr => mr.user_id === currentUser.id).map(mr => mr.role_id);
+    const roles = serverDataCache.roles.filter(r => userRoleIds.includes(r.id));
+    canDelete = roles.some(r => r.manage_messages);
+  }
+
   const avatar = document.createElement('img');
   avatar.className = 'avatar';
   avatar.src = avatarOrDefault(message.users?.avatar);
@@ -1095,17 +1200,69 @@ function appendServerMessage(message) {
   
   const body = document.createElement('div');
   body.className = 'server-message-body';
-  body.innerHTML = `
-    <div class="server-message-meta">
-      <strong style="color: ${isMe ? 'var(--accent)' : 'var(--text)'}">${escapeHtml(author)}</strong>
-      <time>${new Date(message.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</time>
-    </div>
-    <p class="server-message-content">${escapeHtml(message.content)}</p>
-  `;
-  
+
+  if (message.reply_to) {
+    const original = msgEl.querySelector(`[data-message-id="${message.reply_to}"]`);
+    const quote = document.createElement('div');
+    quote.className = 'reply-quote';
+    if (original) {
+      const origAuthor = original.dataset.author || 'User';
+      const origContent = original.dataset.content || '';
+      quote.innerHTML = `<strong>${escapeHtml(origAuthor)}</strong> ${escapeHtml(origContent.substring(0, 50))}`;
+      quote.onclick = () => original.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      quote.innerHTML = `<strong>Original message unavailable</strong>`;
+    }
+    body.appendChild(quote);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'server-message-meta';
+  const author = message.users?.display_name || 'User';
+  meta.innerHTML = `<strong style="color: ${message.sender_id === currentUser.id ? 'var(--accent)' : 'var(--text)'}">${escapeHtml(author)}</strong><time>${new Date(message.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</time>`;
+  body.appendChild(meta);
+
+  const contentEl = document.createElement('p');
+  contentEl.className = 'server-message-content';
+  if (message.deleted_at) {
+    contentEl.classList.add('deleted-msg');
+    contentEl.textContent = 'Mensagem apagada';
+    div.dataset.content = '';
+  } else {
+    contentEl.textContent = message.content;
+    div.dataset.content = message.content;
+  }
+  body.appendChild(contentEl);
+
+  div.dataset.author = author;
+
+  if (!message.deleted_at) {
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+
+    const replyBtn = document.createElement('button');
+    replyBtn.innerHTML = '↩';
+    replyBtn.title = 'Reply';
+    replyBtn.onclick = () => setReplyServer(message);
+    actions.appendChild(replyBtn);
+
+    if (canDelete) {
+      const delBtn = document.createElement('button');
+      delBtn.className = 'delete-btn';
+      delBtn.innerHTML = '🗑';
+      delBtn.title = 'Delete';
+      delBtn.onclick = async () => {
+        if (confirm('Delete this message?')) {
+          try { await api(`/servers/${activeServer.id}/messages/${message.id}`, { method: 'DELETE' }); } catch(e) { alert(e.message); }
+        }
+      };
+      actions.appendChild(delBtn);
+    }
+    div.appendChild(actions);
+  }
+
   div.appendChild(avatar);
   div.appendChild(body);
-  msgEl.appendChild(div);
   msgEl.scrollTop = msgEl.scrollHeight;
 }
 
@@ -1117,10 +1274,11 @@ async function sendServerMessage(event) {
   
   try {
     await api(`/servers/${activeServer.id}/channels/${activeChannel.id}/messages`, {
-      method: 'POST', body: JSON.stringify({ content: input.value })
+      method: 'POST', body: JSON.stringify({ content: input.value, reply_to: replyServer?.id })
     });
     playSound('send');
     input.value = '';
+    cancelReplyServer();
   } catch (err) { alert(err.message); }
 }
 

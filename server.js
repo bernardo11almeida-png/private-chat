@@ -443,7 +443,7 @@ app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
   const before = req.query.before ? Number(req.query.before) : null;
   if (!await areFriends(req.session.userId, friendId)) return res.status(403).json({ error: 'Nao sao amigos' });
 
-  let query = supabase.from('messages').select('*')
+  let query = supabase.from('messages').select('*, reply_to')
     .or(`and(sender_id.eq.${req.session.userId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${req.session.userId})`)
     .order('id', { ascending: false })
     .limit(MESSAGES_PAGE_SIZE);
@@ -461,13 +461,13 @@ app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
 });
 
 app.post('/api/messages', requireAuth, async (req, res) => {
-  const { receiver_id, content } = req.body;
+  const { receiver_id, content, reply_to } = req.body;
   if (!content || !content.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
   if (!await areFriends(req.session.userId, receiver_id)) return res.status(403).json({ error: 'Nao sao amigos' });
   if (await isBlocked(req.session.userId, receiver_id)) return res.status(403).json({ error: 'Bloqueado' });
 
   const { data: message } = await supabase.from('messages')
-    .insert({ sender_id: req.session.userId, receiver_id: receiver_id, content: content.trim() })
+    .insert({ sender_id: req.session.userId, receiver_id: receiver_id, content: content.trim(), reply_to: reply_to || null })
     .select().single();
 
   io.to('user:' + receiver_id).emit('new_message', message);
@@ -494,12 +494,11 @@ app.delete('/api/messages/:id', requireAuth, async (req, res) => {
   const { data: message } = await supabase.from('messages').select('*').eq('id', Number(req.params.id)).maybeSingle();
   if (!message || message.sender_id !== req.session.userId) return res.status(404).json({ error: 'Nao encontrada' });
 
-  await supabase.from('messages').update({ content: '', image: null, deleted_at: new Date().toISOString() }).eq('id', message.id);
+  await supabase.from('messages').update({ content: 'Mensagem apagada', image: null, deleted_at: new Date().toISOString() }).eq('id', message.id);
   if (message.image) await deleteOldUpload(message.image);
 
-  const { data: updated } = await supabase.from('messages').select('*').eq('id', message.id).maybeSingle();
-  io.to('user:' + message.receiver_id).emit('message_updated', updated);
-  io.to('user:' + message.sender_id).emit('message_updated', updated);
+  io.to('user:' + message.receiver_id).emit('message_deleted', { messageId: message.id });
+  io.to('user:' + message.sender_id).emit('message_deleted', { messageId: message.id });
   res.json({ ok: true });
 });
 
@@ -675,7 +674,7 @@ app.get('/api/servers/:id/channels/:channelId/messages', requireAuth, async (req
 
 app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, async (req, res) => {
   const { id: serverId, channelId } = req.params;
-  const { content } = req.body;
+  const { content, reply_to } = req.body;
   if (!content || !content.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
   
   const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
@@ -690,11 +689,37 @@ app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, async (re
   if (isBlocked) return res.status(403).json({ error: 'Voce nao tem permissao para falar neste canal' });
 
   const { data: message } = await supabase.from('server_messages')
-    .insert({ server_id: serverId, channel_id: channelId, sender_id: req.session.userId, content: content.trim() })
+    .insert({ server_id: serverId, channel_id: channelId, sender_id: req.session.userId, content: content.trim(), reply_to: reply_to || null })
     .select('*, users:sender_id(id, serial_id, username, display_name, avatar)').single();
   
   io.to('server:' + serverId).emit('new_server_message', message);
   res.json({ message });
+});
+
+app.delete('/api/servers/:serverId/messages/:msgId', requireAuth, async (req, res) => {
+  const { serverId, msgId } = req.params;
+  const { data: msg } = await supabase.from('server_messages').select('*').eq('id', msgId).maybeSingle();
+  if (!msg) return res.status(404).json({ error: 'Not found' });
+
+  const isOwner = msg.sender_id === req.session.userId;
+  let canManage = false;
+  
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
+  if (server.owner_id === req.session.userId) canManage = true;
+  else {
+    const { data: roles } = await supabase.from('server_member_roles').select('role_id').eq('server_id', serverId).eq('user_id', req.session.userId);
+    const roleIds = (roles || []).map(r => r.role_id);
+    if (roleIds.length > 0) {
+      const { data: roleData } = await supabase.from('server_roles').select('manage_messages').in('id', roleIds);
+      canManage = roleData.some(r => r.manage_messages);
+    }
+  }
+
+  if (!isOwner && !canManage) return res.status(403).json({ error: 'No permission' });
+
+  await supabase.from('server_messages').update({ content: 'Mensagem apagada', deleted_at: new Date().toISOString() }).eq('id', msgId);
+  io.to('server:' + serverId).emit('server_message_deleted', { messageId: Number(msgId) });
+  res.json({ ok: true });
 });
 
 // ---------- GIFs (Giphy API) ----------
