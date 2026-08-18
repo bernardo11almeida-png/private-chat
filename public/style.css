@@ -1138,3 +1138,13 @@ textarea:focus {
   background-color: rgba(0, 0, 0, 0.2);
   background-clip: content-box;
 }
+
+/* Corrigando o scroll nas telas de configurações e amigos */
+#view-settings, #view-friends, #view-users {
+  overflow-y: auto !important;
+  height: 100% !important;
+}
+
+#view-settings .panel, #view-friends .panel, #view-users .panel {
+  margin-bottom: 40px;
+}

@@ -12,19 +12,31 @@ let serverDataCache = null;
 
 let audioCtx = null;
 
-// Motor de sons ASMR suaves (usando Web Audio API)
+// Inicializa o áudio quando o usuário clica (resolve o bloqueio do navegador)
+function initAudio() {
+  if (!audioCtx) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e) { console.error('Audio init error', e); }
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
 function playSound(type) {
-  // Se o usuário não estiver online, não toca som de notificação
-  if (currentUser && currentUser.status !== 'online' && type !== 'login') return;
+  // Corrigido: só bloqueia o som se o status for explicitamente diferente de online
+  if (currentUser && currentUser.status && currentUser.status !== 'online' && type !== 'login') return;
+  
+  initAudio(); // Garante que o áudio está ativado
+  if (!audioCtx) return;
   
   try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const now = audioCtx.currentTime;
-    
     const masterGain = audioCtx.createGain();
     const filter = audioCtx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 2000; // Deixa o som mais macio (sem 8-bit)
+    filter.frequency.value = 2000;
     
     masterGain.connect(filter);
     filter.connect(audioCtx.destination);
@@ -34,13 +46,13 @@ function playSound(type) {
     let dur = 0.2;
 
     if (type === 'send') {
-      freqs = [523.25, 659.25]; // Dó, Mi
+      freqs = [523.25, 659.25];
       dur = 0.15;
     } else if (type === 'receive') {
-      freqs = [659.25, 523.25]; // Mi, Dó
+      freqs = [659.25, 523.25];
       dur = 0.25;
     } else if (type === 'login') {
-      freqs = [392, 523.25, 659.25]; // Sol, Dó, Mi
+      freqs = [392, 523.25, 659.25];
       dur = 0.4;
     } else {
       return;
@@ -48,9 +60,9 @@ function playSound(type) {
 
     freqs.forEach((f, i) => {
       const osc = audioCtx.createOscillator();
-      osc.type = 'sine'; // Onda senoidal = som puro e suave
+      osc.type = 'sine';
       osc.frequency.value = f;
-      osc.detune.value = Math.random() * 10 - 5; // Leve defasagem para ficar mais orgânico
+      osc.detune.value = Math.random() * 10 - 5;
       
       const oscGain = audioCtx.createGain();
       const startTime = now + (i * 0.08);
@@ -88,7 +100,6 @@ function showNotification(title, body, avatarUrl) {
     setTimeout(() => notif.remove(), 400);
   }, 4000);
 }
-
 const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#5865f2"/><text x="50%" y="55%" font-size="32" fill="white" text-anchor="middle" font-family="sans-serif">?</text></svg>`);
 
 async function api(path, options = {}) {
@@ -141,6 +152,7 @@ function setupAuthTabs() {
 function setupAuthForms() {
   document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    initAudio(); // ATIVA O ÁUDIO AQUI!
     try {
       const { user } = await api('/login', { method: 'POST', body: JSON.stringify({
         username: document.getElementById('login-username').value.trim(),
@@ -152,6 +164,7 @@ function setupAuthForms() {
 
   document.getElementById('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    initAudio(); // ATIVA O ÁUDIO AQUI!
     try {
       const { user } = await api('/register', { method: 'POST', body: JSON.stringify({
         username: document.getElementById('register-username').value.trim(),
@@ -185,13 +198,14 @@ function connectSocket() {
   
   socket.on('new_message', (message) => {
     const isSender = message.sender_id === currentUser.id;
-    const friend = cachedFriends.find(f => f.id === (isSender ? message.receiver_id : message.sender_id));
+    const friendId = isSender ? message.receiver_id : message.sender_id;
+    const friend = cachedFriends.find(f => f.id === friendId);
     
     const isActiveChat = activeFriend && (message.sender_id === activeFriend.id || message.receiver_id === activeFriend.id);
     
     if (isActiveChat) {
       appendMessage(message);
-      if (!isSender && !document.hasFocus()) playSound('receive');
+      if (!isSender) playSound('receive');
     } else {
       if (!isSender) {
         playSound('receive');
@@ -206,9 +220,11 @@ function connectSocket() {
   });
 
   socket.on('new_server_message', (message) => {
-    if (activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id) {
+    const isActiveChat = activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id;
+    
+    if (isActiveChat) {
       appendServerMessage(message);
-      if (message.sender_id !== currentUser.id && !document.hasFocus()) {
+      if (message.sender_id !== currentUser.id) {
         playSound('receive');
       }
     } else {
@@ -219,6 +235,24 @@ function connectSocket() {
     }
   });
 }
+
+socket.on('presence', ({ userId, online }) => {
+  if (online) onlineFriendIds.add(userId); else onlineFriendIds.delete(userId);
+  updateOnlineIndicators();
+});
+socket.on('new_server_message', (message) => {
+  if (activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id) {
+    appendServerMessage(message);
+    if (message.sender_id !== currentUser.id && !document.hasFocus()) {
+      playSound('receive');
+    }
+  } else {
+    if (message.sender_id !== currentUser.id) {
+      playSound('receive');
+      showNotification(message.users?.display_name || 'Server Message', `#${activeChannel?.name || 'channel'}: ${message.content}`, avatarOrDefault(message.users?.avatar));
+    }
+  }
+});
 
 function setupStatus() {
   const grid = document.getElementById('status-grid');
