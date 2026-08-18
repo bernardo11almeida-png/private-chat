@@ -688,12 +688,20 @@ app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, async (re
 app.get('/api/gifs/search', requireAuth, async (req, res) => {
   const { q } = req.query;
   try {
-    // Usando a API pública do Giphy (sem necessidade de chave para poucos usos)
-    const response = await fetch(`https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q)}&api_key=dc6zaTOxFJmzC&limit=24`);
+    const response = await fetch(`https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q || 'hello')}&api_key=dc6zaTOxFJmzC&limit=24&rating=pg`);
     const data = await response.json();
-    const gifs = data.data.map(g => g.images.fixed_height_small.url);
-    res.json({ gifs });
-  } catch (e) { res.status(500).json({ error: 'Erro ao buscar GIFs' }); }
+    
+    if (data && data.data) {
+      // Pega o tamanho original ou reduzido para garantir que sempre tenha uma URL
+      const gifs = data.data.map(g => g.images?.fixed_height?.url || g.images?.original?.url).filter(Boolean);
+      res.json({ gifs });
+    } else {
+      res.json({ gifs: [] });
+    }
+  } catch (e) { 
+    console.error('Giphy Error:', e); 
+    res.status(500).json({ error: 'Erro ao buscar GIFs' }); 
+  }
 });
 
 app.get('/api/gifs/favorites', requireAuth, async (req, res) => {

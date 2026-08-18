@@ -778,16 +778,17 @@ function setupChatForm() {
 
 async function loadGifTab(tab, query = 'hello') {
   const grid = document.getElementById('gif-grid');
+  if (!grid) return;
   grid.innerHTML = '<p class="muted small">Loading...</p>';
   
   try {
     let gifs = [];
     if (tab === 'search') {
       const res = await api(`/gifs/search?q=${encodeURIComponent(query)}`);
-      gifs = res.gifs;
+      gifs = res.gifs || [];
     } else {
       const res = await api('/gifs/favorites');
-      gifs = res.gifs;
+      gifs = res.gifs || [];
     }
 
     grid.innerHTML = '';
@@ -800,7 +801,6 @@ async function loadGifTab(tab, query = 'hello') {
       const img = document.createElement('img');
       img.src = url;
       img.onclick = async () => {
-        // Envia o GIF como mensagem
         const { message } = await api('/messages', { method: 'POST', body: JSON.stringify({ receiver_id: activeFriend.id, content: `img:${url}` }) });
         appendMessage(message);
         playSound('send');
@@ -808,10 +808,9 @@ async function loadGifTab(tab, query = 'hello') {
       };
       img.oncontextmenu = async (e) => {
         e.preventDefault();
-        // Favoritar / Desfavoritar
         try {
           await api('/gifs/favorites', { method: 'POST', body: JSON.stringify({ gif_url: url }) });
-          alert('GIF favoritado!');
+          alert('GIF added to favorites!');
         } catch(err) { alert(err.message); }
       };
       grid.appendChild(img);
