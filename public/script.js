@@ -132,8 +132,6 @@ async function init() {
   setupAppearance();
   setupChatForm();
   setupProfileModal();
-  setupServersView();
-  setupProfileModal();
   setupGifSelectModal();
   setupServersView();
 
@@ -227,26 +225,24 @@ function connectSocket() {
     updateUnreadBadges();
   });
 
-  socket.on('presence', ({ userId, online }) => {
-    if (online) onlineFriendIds.add(userId); else onlineFriendIds.delete(userId);
-    updateOnlineIndicators();
-  });
-
-  socket.on('new_server_message', (message) => {
-    const isActiveChat = activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id;
-    
-    if (isActiveChat) {
-      appendServerMessage(message);
-      if (message.sender_id !== currentUser.id) {
-        playSound('receive');
-      }
-    } else {
-      if (message.sender_id !== currentUser.id) {
-        playSound('receive');
-        showNotification(message.users?.display_name || 'Server Message', `#${activeChannel?.name || 'channel'}: ${message.content}`, avatarOrDefault(message.users?.avatar));
-      }
+socket.on('presence', ({ userId, online }) => {
+  if (online) onlineFriendIds.add(userId); else onlineFriendIds.delete(userId);
+  updateOnlineIndicators();
+});
+socket.on('new_server_message', (message) => {
+  if (activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id) {
+    appendServerMessage(message);
+    if (message.sender_id !== currentUser.id && !document.hasFocus()) {
+      playSound('receive');
     }
-  });
+  } else {
+    if (message.sender_id !== currentUser.id) {
+      playSound('receive');
+      showNotification(message.users?.display_name || 'Server Message', `#${activeChannel?.name || 'channel'}: ${message.content}`, avatarOrDefault(message.users?.avatar));
+    }
+  }
+});
+
     socket.on('reaction_added', (data) => {
     // Se a mensagem estiver na tela, adiciona a reação visualmente
     const msgEl = document.querySelector(`[data-message-id="${data.messageId}"]`);
