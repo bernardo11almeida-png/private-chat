@@ -1,5 +1,6 @@
 // server.js
 require('dotenv').config();
+console.log('GIPHY_API_KEY carregada:', process.env.GIPHY_API_KEY ? 'SIM (' + process.env.GIPHY_API_KEY.slice(0,4) + '...)' : 'NAO');
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
@@ -137,7 +138,10 @@ app.post('/api/register', loginLimiter, async (req, res) => {
     .insert({ serial_id: serial, username, display_name, password: hashed, avatar: '', bio: '' })
     .select().single();
 
-  if (error) return res.status(500).json({ error: 'Erro ao registrar' });
+    if (error) {
+    console.error('Erro ao registrar:', error);
+      return res.status(500).json({ error: 'Erro ao registrar' });
+    }
   
   req.session.userId = newUser.id;
   res.json({ user: publicUser(newUser) });
@@ -708,7 +712,11 @@ app.get('/api/gifs/favorites', requireAuth, async (req, res) => {
 
 app.post('/api/gifs/favorites', requireAuth, async (req, res) => {
   const { gif_url } = req.body;
-  await supabase.from('favorite_gifs').upsert({ user_id: req.session.userId, gif_url }, { onConflict: 'user_id,gif_url' });
+  const { error } = await supabase.from('favorite_gifs').upsert({ user_id: req.session.userId, gif_url }, { onConflict: 'user_id,gif_url' });
+  if (error) {
+    console.error('Erro ao favoritar GIF:', error);
+    return res.status(500).json({ error: 'Erro ao favoritar GIF' });
+  }
   res.json({ ok: true });
 });
 
@@ -735,8 +743,8 @@ app.post('/api/messages/:id/reactions', requireAuth, async (req, res) => {
     res.json({ ok: true, action: 'removed' });
   } else {
     await supabase.from('message_reactions').insert({ message_id: msgId, user_id: req.session.userId, emoji });
-    io.to('user:' + msg.sender_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId, displayName: currentUser.display_name });
-    io.to('user:' + msg.receiver_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId, displayName: currentUser.display_name });
+    io.to('user:' + msg.sender_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId });
+    io.to('user:' + msg.receiver_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId });
     res.json({ ok: true, action: 'added' });
   }
 });

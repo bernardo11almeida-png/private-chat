@@ -812,6 +812,9 @@ async function loadGifTab(tab, query = 'hello') {
     }
 
     gifs.forEach(url => {
+      const wrap = document.createElement('div');
+      wrap.className = 'gif-item';
+
       const img = document.createElement('img');
       img.src = url;
       img.onclick = async () => {
@@ -820,14 +823,28 @@ async function loadGifTab(tab, query = 'hello') {
         playSound('send');
         document.getElementById('gif-picker').classList.add('hidden');
       };
-      img.oncontextmenu = async (e) => {
-        e.preventDefault();
+
+      const favBtn = document.createElement('button');
+      favBtn.type = 'button';
+      favBtn.className = 'gif-fav-btn';
+      favBtn.textContent = tab === 'fav' ? '✖' : '★';
+      favBtn.title = tab === 'fav' ? 'Remove dos favoritos' : 'Adicionar aos favoritos';
+      favBtn.onclick = async (e) => {
+        e.stopPropagation();
         try {
-          await api('/gifs/favorites', { method: 'POST', body: JSON.stringify({ gif_url: url }) });
-          alert('GIF added to favorites!');
+          if (tab === 'fav') {
+            await api('/gifs/favorites', { method: 'DELETE', body: JSON.stringify({ gif_url: url }) });
+            wrap.remove();
+          } else {
+            await api('/gifs/favorites', { method: 'POST', body: JSON.stringify({ gif_url: url }) });
+            favBtn.textContent = '✔';
+          }
         } catch(err) { alert(err.message); }
       };
-      grid.appendChild(img);
+
+      wrap.appendChild(img);
+      wrap.appendChild(favBtn);
+      grid.appendChild(wrap);
     });
   } catch (err) {
     grid.innerHTML = `<p class="form-error">${err.message}</p>`;
