@@ -47,6 +47,15 @@
   --text-muted: #8fa89a;
 }
 
+[data-theme="coffee"] {
+  --bg: #241608;
+  --bg-elevated: #3a230b;
+  --bg-elevated-2: #4a2e10;
+  --border: #5c3a16;
+  --text: #f5e6d3;
+  --text-muted: #c9a876;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -385,6 +394,7 @@ button:hover { background: var(--accent-hover); }
 .swatch-light { background: #f5f6f8; }
 .swatch-midnight { background: #0b0e1a; }
 .swatch-forest { background: #141d18; }
+.swatch-coffee { background: #241608; }
 
 .accent-row {
   display: flex;

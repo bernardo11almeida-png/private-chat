@@ -284,24 +284,6 @@ socket.on('new_server_message', (message) => {
   });
 }
 
-socket.on('presence', ({ userId, online }) => {
-  if (online) onlineFriendIds.add(userId); else onlineFriendIds.delete(userId);
-  updateOnlineIndicators();
-});
-socket.on('new_server_message', (message) => {
-  if (activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id) {
-    appendServerMessage(message);
-    if (message.sender_id !== currentUser.id && !document.hasFocus()) {
-      playSound('receive');
-    }
-  } else {
-    if (message.sender_id !== currentUser.id) {
-      playSound('receive');
-      showNotification(message.users?.display_name || 'Server Message', `#${activeChannel?.name || 'channel'}: ${message.content}`, avatarOrDefault(message.users?.avatar));
-    }
-  }
-});
-
 function setupStatus() {
   const grid = document.getElementById('status-grid');
   if (!grid) return;
