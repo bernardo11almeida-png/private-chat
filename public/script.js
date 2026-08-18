@@ -136,6 +136,7 @@ async function init() {
   setupProfileModal();
   setupGifSelectModal();
   setupServersView();
+  setupHome();
 
   try {
     const { user } = await api('/me');
@@ -314,6 +315,21 @@ function connectSocket() {
   });
 }
 
+function setupHome() {
+  document.querySelectorAll('.quick-action-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      if (action === 'dms') switchView('chat');
+      else if (action === 'add-friend') switchView('friends');
+      else if (action === 'create-server') {
+        switchView('servers');
+        setTimeout(() => document.getElementById('server-name-input')?.focus(), 100);
+      }
+      else if (action === 'settings') switchView('settings');
+    });
+  });
+}
+
 function setupStatus() {
   const grid = document.getElementById('status-grid');
   if (!grid) return;
@@ -457,7 +473,7 @@ async function loadFriends() {
       
       const badgeHtml = friend.unread_count > 0 ? `<span class="avatar-badge">${friend.unread_count > 99 ? '99+' : friend.unread_count}</span>` : '';
       
-      li.innerHTML = `<div class="clickable"><div class="avatar-wrap"><img class="avatar" src="${avatarOrDefault(friend.avatar)}" />${badgeHtml}</div><div class="info"><div class="name">${escapeHtml(friend.display_name)}</div><div class="muted small">${friend.serial_id}</div></div></div><div class="actions"><button class="chat-btn btn-secondary">💬</button><button class="remove-btn btn-danger">🗑</button></div>`;
+      li.innerHTML = `<div class="clickable"><div class="avatar-wrap"><img class="avatar" src="${avatarOrDefault(friend.avatar)}" />${badgeHtml}</div><div class="info"><div class="name">${escapeHtml(friend.display_name)}</div><div class="muted small">${friend.serial_id}</div></div></div><div class="actions"><button class="chat-btn btn-secondary" title="Message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button><button class="remove-btn btn-danger" title="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button></div>`;
       li.querySelector('.clickable').addEventListener('click', () => openProfileModal(friend.id, 'friend'));
       li.querySelector('.chat-btn').addEventListener('click', () => { switchView('chat'); openChat(friend); });
       li.querySelector('.remove-btn').addEventListener('click', async () => { await api('/friends/' + friend.id, { method: 'DELETE' }); loadFriends(); });
@@ -1157,6 +1173,9 @@ function renderChannels(channels) {
   document.getElementById('active-channel-name').textContent = activeChannel.name;
   
   channels.forEach(ch => {
+    const wrap = document.createElement('div');
+    wrap.className = 'channel-wrap';
+    
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'channel-item' + (ch.id === activeChannel.id ? ' active' : '');
@@ -1167,7 +1186,45 @@ function renderChannels(channels) {
       renderChannels(channels);
       loadChannelMessages();
     });
-    list.appendChild(btn);
+    wrap.appendChild(btn);
+
+    // Botões de Editar e Deletar (Apenas para o dono)
+    if (activeServer.owner_id === currentUser.id) {
+      const actions = document.createElement('div');
+      actions.className = 'channel-actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.title = 'Edit Channel';
+      editBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`;
+      editBtn.onclick = (e) => {
+        e.stopPropagation();
+        const newName = prompt('Enter new channel name:', ch.name);
+        if (newName && newName.trim()) {
+          api(`/channels/${ch.id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) })
+            .then(() => openServerChat(activeServer))
+            .catch(err => alert(err.message));
+        }
+      };
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'delete-btn';
+      delBtn.title = 'Delete Channel';
+      delBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>`;
+      delBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (confirm(`Delete channel #${ch.name}? All messages will be lost.`)) {
+          try {
+            await api(`/channels/${ch.id}`, { method: 'DELETE' });
+            openServerChat(activeServer);
+          } catch(err) { alert(err.message); }
+        }
+      };
+
+      actions.append(editBtn, delBtn);
+      wrap.appendChild(actions);
+    }
+    
+    list.appendChild(wrap);
   });
   
   loadChannelMessages();

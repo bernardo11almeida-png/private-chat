@@ -598,17 +598,29 @@ app.get('/api/servers/:id/data', requireAuth, async (req, res) => {
   res.json({ channels, roles, members, memberRoles, overrides });
 });
 
-app.post('/api/servers/:id/channels', requireAuth, async (req, res) => {
-  const serverId = Number(req.params.id);
+app.put('/api/channels/:id', requireAuth, async (req, res) => {
+  const channelId = Number(req.params.id);
   const { name } = req.body;
-  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
-  if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+  const { data: channel } = await supabase.from('server_channels').select('server_id').eq('id', channelId).maybeSingle();
+  if (!channel) return res.status(404).json({ error: 'Canal nao encontrado' });
   
-  const { data: channel, error } = await supabase.from('server_channels')
-    .insert({ server_id: serverId, name: name.trim().toLowerCase().replace(/\s+/g, '-') })
-    .select().single();
-  if (error) return res.status(500).json({ error: 'Erro ao criar canal' });
-  res.json({ channel });
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', channel.server_id).maybeSingle();
+  if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+
+  await supabase.from('server_channels').update({ name: name.trim().toLowerCase().replace(/\s+/g, '-') }).eq('id', channelId);
+  res.json({ ok: true });
+});
+
+app.delete('/api/channels/:id', requireAuth, async (req, res) => {
+  const channelId = Number(req.params.id);
+  const { data: channel } = await supabase.from('server_channels').select('server_id').eq('id', channelId).maybeSingle();
+  if (!channel) return res.status(404).json({ error: 'Canal nao encontrado' });
+  
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', channel.server_id).maybeSingle();
+  if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+
+  await supabase.from('server_channels').delete().eq('id', channelId);
+  res.json({ ok: true });
 });
 
 app.post('/api/servers/:id/roles', requireAuth, async (req, res) => {
