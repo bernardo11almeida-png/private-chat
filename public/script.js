@@ -25,34 +25,37 @@ function initAudio() {
 }
 
 function playSound(type) {
-  // Corrigido: só bloqueia o som se o status for explicitamente diferente de online
+  // Só bloqueia o som se o status for explicitamente diferente de online
   if (currentUser && currentUser.status && currentUser.status !== 'online' && type !== 'login') return;
   
-  initAudio(); // Garante que o áudio está ativado
+  initAudio();
   if (!audioCtx) return;
   
   try {
     const now = audioCtx.currentTime;
     const masterGain = audioCtx.createGain();
     const filter = audioCtx.createBiquadFilter();
+    
     filter.type = 'lowpass';
-    filter.frequency.value = 2000;
+    filter.frequency.value = 2000; // Deixa o som suave (sem 8-bit)
     
     masterGain.connect(filter);
     filter.connect(audioCtx.destination);
-    masterGain.gain.setValueAtTime(0, now);
+    
+    // CORREÇÃO: O volume principal precisa ser 1 para o som sair!
+    masterGain.gain.value = 1.0;
     
     let freqs = [];
     let dur = 0.2;
 
     if (type === 'send') {
-      freqs = [523.25, 659.25];
+      freqs = [523.25, 659.25]; // Dó, Mi
       dur = 0.15;
     } else if (type === 'receive') {
-      freqs = [659.25, 523.25];
+      freqs = [659.25, 523.25]; // Mi, Dó
       dur = 0.25;
     } else if (type === 'login') {
-      freqs = [392, 523.25, 659.25];
+      freqs = [392, 523.25, 659.25]; // Sol, Dó, Mi
       dur = 0.4;
     } else {
       return;
@@ -60,14 +63,16 @@ function playSound(type) {
 
     freqs.forEach((f, i) => {
       const osc = audioCtx.createOscillator();
-      osc.type = 'sine';
+      osc.type = 'sine'; // Onda senoidal = som puro e suave
       osc.frequency.value = f;
-      osc.detune.value = Math.random() * 10 - 5;
+      osc.detune.value = Math.random() * 10 - 5; // Leve defasagem
       
       const oscGain = audioCtx.createGain();
       const startTime = now + (i * 0.08);
+      
+      // Volume de cada nota (aumentado para 0.3 para garantir que saia)
       oscGain.gain.setValueAtTime(0, startTime);
-      oscGain.gain.linearRampToValueAtTime(0.15, startTime + 0.02);
+      oscGain.gain.linearRampToValueAtTime(0.3, startTime + 0.02);
       oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
 
       osc.connect(oscGain);
