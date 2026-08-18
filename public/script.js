@@ -10,6 +10,85 @@ let cachedServers = [];
 let activeChannel = null;
 let serverDataCache = null;
 
+let audioCtx = null;
+
+// Motor de sons ASMR suaves (usando Web Audio API)
+function playSound(type) {
+  // Se o usuário não estiver online, não toca som de notificação
+  if (currentUser && currentUser.status !== 'online' && type !== 'login') return;
+  
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    
+    const masterGain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 2000; // Deixa o som mais macio (sem 8-bit)
+    
+    masterGain.connect(filter);
+    filter.connect(audioCtx.destination);
+    masterGain.gain.setValueAtTime(0, now);
+    
+    let freqs = [];
+    let dur = 0.2;
+
+    if (type === 'send') {
+      freqs = [523.25, 659.25]; // Dó, Mi
+      dur = 0.15;
+    } else if (type === 'receive') {
+      freqs = [659.25, 523.25]; // Mi, Dó
+      dur = 0.25;
+    } else if (type === 'login') {
+      freqs = [392, 523.25, 659.25]; // Sol, Dó, Mi
+      dur = 0.4;
+    } else {
+      return;
+    }
+
+    freqs.forEach((f, i) => {
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sine'; // Onda senoidal = som puro e suave
+      osc.frequency.value = f;
+      osc.detune.value = Math.random() * 10 - 5; // Leve defasagem para ficar mais orgânico
+      
+      const oscGain = audioCtx.createGain();
+      const startTime = now + (i * 0.08);
+      oscGain.gain.setValueAtTime(0, startTime);
+      oscGain.gain.linearRampToValueAtTime(0.15, startTime + 0.02);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+      osc.connect(oscGain);
+      oscGain.connect(masterGain);
+      osc.start(startTime);
+      osc.stop(startTime + dur);
+    });
+  } catch(e) { console.error('Audio error', e); }
+}
+
+function showNotification(title, body, avatarUrl) {
+  const container = document.getElementById('notification-container');
+  if (!container) return;
+  
+  const notif = document.createElement('div');
+  notif.className = 'notification-card';
+  notif.innerHTML = `
+    <img src="${avatarUrl}" class="notification-avatar" alt="avatar" />
+    <div class="notification-content">
+      <div class="notification-title">${escapeHtml(title)}</div>
+      <div class="notification-body">${escapeHtml(body)}</div>
+    </div>
+  `;
+  container.appendChild(notif);
+  
+  setTimeout(() => notif.classList.add('show'), 10);
+  
+  setTimeout(() => {
+    notif.classList.remove('show');
+    setTimeout(() => notif.remove(), 400);
+  }, 4000);
+}
+
 const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#5865f2"/><text x="50%" y="55%" font-size="32" fill="white" text-anchor="middle" font-family="sans-serif">?</text></svg>`);
 
 async function api(path, options = {}) {
@@ -92,22 +171,74 @@ function showAuthScreen() {
 function enterApp() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
-  renderProfile(); connectSocket(); loadFriends(); loadFriendRequests(); switchView('home');
+  renderProfile(); 
+  connectSocket(); 
+  loadFriends(); 
+  loadFriendRequests(); 
+  setupStatus();
+  playSound('login');
+  switchView('home');
 }
 
 function connectSocket() {
   socket = io();
+  
   socket.on('new_message', (message) => {
-    if (activeFriend && (message.sender_id === activeFriend.id || message.receiver_id === activeFriend.id)) appendMessage(message);
+    const isSender = message.sender_id === currentUser.id;
+    const friend = cachedFriends.find(f => f.id === (isSender ? message.receiver_id : message.sender_id));
+    
+    const isActiveChat = activeFriend && (message.sender_id === activeFriend.id || message.receiver_id === activeFriend.id);
+    
+    if (isActiveChat) {
+      appendMessage(message);
+      if (!isSender && !document.hasFocus()) playSound('receive');
+    } else {
+      if (!isSender) {
+        playSound('receive');
+        showNotification(friend?.display_name || 'New Message', message.content, avatarOrDefault(friend?.avatar));
+      }
+    }
   });
+
   socket.on('presence', ({ userId, online }) => {
     if (online) onlineFriendIds.add(userId); else onlineFriendIds.delete(userId);
     updateOnlineIndicators();
   });
+
   socket.on('new_server_message', (message) => {
     if (activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id) {
       appendServerMessage(message);
+      if (message.sender_id !== currentUser.id && !document.hasFocus()) {
+        playSound('receive');
+      }
+    } else {
+      if (message.sender_id !== currentUser.id) {
+        playSound('receive');
+        showNotification(message.users?.display_name || 'Server Message', `#${activeChannel?.name || 'channel'}: ${message.content}`, avatarOrDefault(message.users?.avatar));
+      }
     }
+  });
+}
+
+function setupStatus() {
+  const grid = document.getElementById('status-grid');
+  if (!grid) return;
+  const buttons = grid.querySelectorAll('.status-btn');
+  
+  function updateActiveStatus() {
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.status === currentUser.status));
+  }
+  updateActiveStatus();
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const status = btn.dataset.status;
+      try {
+        await api('/status', { method: 'PUT', body: JSON.stringify({ status }) });
+        currentUser.status = status;
+        updateActiveStatus();
+      } catch (err) { alert(err.message); }
+    });
   });
 }
 
@@ -399,7 +530,9 @@ function setupChatForm() {
     if (!input.value.trim()) return;
     try {
       const { message } = await api('/messages', { method: 'POST', body: JSON.stringify({ receiver_id: activeFriend.id, content: input.value }) });
-      appendMessage(message); input.value = '';
+      appendMessage(message); 
+      playSound('send');
+      input.value = '';
     } catch (err) { alert(err.message); }
   });
 }
@@ -623,6 +756,7 @@ async function sendServerMessage(event) {
     await api(`/servers/${activeServer.id}/channels/${activeChannel.id}/messages`, {
       method: 'POST', body: JSON.stringify({ content: input.value })
     });
+    playSound('send');
     input.value = '';
   } catch (err) { alert(err.message); }
 }

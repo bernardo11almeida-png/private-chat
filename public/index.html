@@ -220,6 +220,22 @@
             <p class="form-success" id="settings-success"></p>
           </form>
           <h2 class="section-title">Appearance</h2>
+          <h2 class="section-title">Status</h2>
+          <label class="field-label">Your Status</label>
+          <div class="status-grid" id="status-grid">
+            <button type="button" class="status-btn" data-status="online">
+              <span class="status-dot online"></span> Online
+            </button>
+            <button type="button" class="status-btn" data-status="away">
+              <span class="status-dot away"></span> Away
+            </button>
+            <button type="button" class="status-btn" data-status="busy">
+              <span class="status-dot busy"></span> Do Not Disturb
+            </button>
+            <button type="button" class="status-btn" data-status="invisible">
+              <span class="status-dot invisible"></span> Invisible
+            </button>
+          </div>
           <label class="field-label">Theme</label>
           <div class="theme-grid" id="theme-grid">
             <button type="button" class="theme-swatch" data-theme="dark"><span class="swatch-preview swatch-dark"></span> Dark</button>
@@ -323,6 +339,11 @@
       <ul id="channel-permissions-list" class="simple-list"></ul>
     </div>
   </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+    <!-- ===== Notification Container ===== -->
+  <div id="notification-container" class="notification-container"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
