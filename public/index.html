@@ -56,6 +56,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
           <span>Users</span>
         </button>
+        <button class="nav-btn" data-view="chat" title="Direct Messages">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Messages</span>
+        </button>
         <button class="nav-btn" data-view="servers" title="Servers">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M9 4v16M15 4v16M4 9h16M4 15h16"/></svg>
           <span>Servers</span>
@@ -88,10 +92,10 @@
       <section id="view-friends" class="view hidden">
         <div class="panel">
           <h2>Add Friend</h2>
-          <div class="add-friend-row">
-            <input type="text" id="friend-serial-input" placeholder="Enter Serial ID... (#000000000)" />
-            <button id="send-friend-request-btn">Send Request</button>
-          </div>
+            <form id="add-friend-form" class="add-friend-row">
+              <input type="text" id="friend-serial-input" placeholder="Enter Serial ID... (#000000000)" />
+              <button type="submit" id="send-friend-request-btn">Send Request</button>
+            </form>
           <p class="form-error" id="add-friend-error"></p>
           <h3>Pending Requests</h3>
           <ul id="friend-requests-list" class="simple-list"></ul>

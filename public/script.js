@@ -142,15 +142,35 @@ function renderProfile() {
 
 // ---------- Friends & Chat ----------
 function setupFriendsView() {
-  document.getElementById('send-friend-request-btn').addEventListener('click', async () => {
-    const input = document.getElementById('friend-serial-input');
-    const errorEl = document.getElementById('add-friend-error');
-    try {
-      await api('/friends/request', { method: 'POST', body: JSON.stringify({ serial_id: input.value.trim() }) });
-      input.value = ''; errorEl.style.color = 'var(--online)'; errorEl.textContent = 'Request sent!';
-      loadFriendRequests();
-    } catch (err) { errorEl.style.color = 'var(--danger)'; errorEl.textContent = err.message; }
-  });
+  const form = document.getElementById('add-friend-form');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); // Impede a página de recarregar
+      const input = document.getElementById('friend-serial-input');
+      const errorEl = document.getElementById('add-friend-error');
+      const btn = document.getElementById('send-friend-request-btn');
+      
+      if (!input.value.trim()) return; // Não faz nada se estiver vazio
+      
+      btn.textContent = 'Sending...';
+      btn.disabled = true;
+      errorEl.textContent = '';
+
+      try {
+        await api('/friends/request', { method: 'POST', body: JSON.stringify({ serial_id: input.value.trim() }) });
+        input.value = ''; 
+        errorEl.style.color = 'var(--online)'; 
+        errorEl.textContent = 'Request sent!';
+        loadFriendRequests(); // Atualiza a lista na hora
+      } catch (err) { 
+        errorEl.style.color = 'var(--danger)'; 
+        errorEl.textContent = err.message; 
+      } finally {
+        btn.textContent = 'Send Request';
+        btn.disabled = false;
+      }
+    });
+  }
 }
 
 async function loadFriendRequests() {
@@ -309,19 +329,26 @@ function updateOnlineIndicators() {
 
 async function openChat(friend) {
   activeFriend = friend;
-  renderChatFriendList();
-  document.getElementById('chat-empty').classList.add('hidden');
-  document.getElementById('chat-active').classList.remove('hidden');
-  document.getElementById('chat-header-avatar').src = avatarOrDefault(friend.avatar);
-  document.getElementById('chat-header-name').textContent = friend.display_name;
-  document.getElementById('chat-header-status').textContent = onlineFriendIds.has(friend.id) ? '● Online' : '● Offline';
-  const messagesEl = document.getElementById('chat-messages');
-  messagesEl.innerHTML = '<p class="muted small">Loading...</p>';
-  try {
-    const { messages } = await api('/messages/' + friend.id);
-    messagesEl.innerHTML = '';
-    messages.forEach(appendMessage);
-  } catch (err) { messagesEl.innerHTML = `<p class="form-error">${err.message}</p>`; }
+  switchView('chat'); // Garante que muda para a tela de chat
+  
+  // Pequeno atraso para garantir que o HTML carregou antes de procurar os elementos
+  setTimeout(() => {
+    document.getElementById('chat-empty').classList.add('hidden');
+    document.getElementById('chat-active').classList.remove('hidden');
+    document.getElementById('chat-header-avatar').src = avatarOrDefault(friend.avatar);
+    document.getElementById('chat-header-name').textContent = friend.display_name;
+    document.getElementById('chat-header-status').textContent = onlineFriendIds.has(friend.id) ? '● Online' : '● Offline';
+    
+    const messagesEl = document.getElementById('chat-messages');
+    messagesEl.innerHTML = '<p class="muted small">Loading...</p>';
+    
+    api('/messages/' + friend.id).then(({ messages }) => {
+      messagesEl.innerHTML = '';
+      messages.forEach(appendMessage);
+    }).catch(err => {
+      messagesEl.innerHTML = `<p class="form-error">${err.message}</p>`;
+    });
+  }, 50);
 }
 
 function appendMessage(message) {
