@@ -1316,7 +1316,7 @@ textarea:focus {
   border-radius: 50%;
   background: rgba(0,0,0,0.6);
   border: none;
-  color: rgb(255, 187, 0);
+  color: rgb(255, 255, 255);
   font-size: 12px;
   display: flex;
   align-items: center;
