@@ -8,7 +8,6 @@ const http = require('http');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const { Server } = require('socket.io');
-const fetch = require('node-fetch');
 
 const supabase = require('./db');
 const { generateSerialId } = require('./serialId');
