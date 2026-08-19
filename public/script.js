@@ -1203,6 +1203,26 @@ function setupSettingsView() {
     try { const { user } = await api('/upload/banner', { method: 'POST', body: formData }); currentUser = user; renderProfile(); fillSettingsForm(); } catch (err) { showToast(err.message, 'error'); }
     e.target.value = '';
   });
+  document.getElementById('avatar-gif-btn').addEventListener('click', () => openGifSelectModal('avatar'));
+document.getElementById('banner-gif-btn').addEventListener('click', () => openGifSelectModal('banner'));
+
+document.getElementById('remove-avatar-btn').addEventListener('click', async () => {
+  try {
+    const { user } = await api('/upload/avatar', { method: 'DELETE' });
+    currentUser = user;
+    renderProfile();
+    fillSettingsForm();
+  } catch (err) { showToast(err.message, 'error'); }
+});
+
+document.getElementById('remove-banner-btn').addEventListener('click', async () => {
+  try {
+    const { user } = await api('/upload/banner', { method: 'DELETE' });
+    currentUser = user;
+    renderProfile();
+    fillSettingsForm();
+  } catch (err) { showToast(err.message, 'error'); }
+});
 }
 
 function setupAppearance() {
