@@ -503,7 +503,19 @@ function renderProfile() {
   document.getElementById('profile-display-name').textContent = currentUser.display_name;
   document.getElementById('profile-username').textContent = '@' + currentUser.username;
   document.getElementById('profile-serial').textContent = currentUser.serial_id;
-  document.getElementById('profile-bio').textContent = currentUser.bio || '';
+  document.getElementById('profile-bio').textContent = currentUser.bio || 'No bio provided.';
+  
+  // Preenche o banner
+  const bannerEl = document.getElementById('profile-banner-el');
+  if (currentUser.banner) {
+    bannerEl.style.backgroundImage = `url('${currentUser.banner}')`;
+  } else {
+    bannerEl.style.backgroundImage = 'linear-gradient(135deg, var(--accent), var(--accent-hover))';
+  }
+
+  // Atualiza o nome no header da Home
+  const homeUserEl = document.getElementById('home-username');
+  if (homeUserEl) homeUserEl.textContent = currentUser.display_name;
 }
 
 // ---------- Friends & Chat ----------

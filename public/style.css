@@ -1525,3 +1525,120 @@ textarea:focus {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ===== Home Synto ===== */
+.home-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.home-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.brand-name {
+  font-size: 56px;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: 4px;
+  background: linear-gradient(135deg, var(--accent), #00d4ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 20px rgba(88, 101, 242, 0.3);
+}
+
+.home-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.home-profile-card {
+  flex: 2;
+  max-width: none;
+  margin: 0;
+}
+
+.profile-banner {
+  height: 220px;
+  background-size: cover;
+  background-position: center;
+  border-bottom: 4px solid var(--accent);
+}
+
+.profile-card-body {
+  padding: 0 32px 32px;
+  position: relative;
+}
+
+.profile-card-body h2 {
+  font-size: 28px;
+  margin-top: 8px;
+}
+
+.bio-box {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--bg-elevated-2);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+}
+
+.bio-box .bio {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.home-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: sticky;
+  top: 20px;
+}
+
+.home-quick-actions {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.home-quick-actions h2 { margin-top: 0; margin-bottom: 16px; font-size: 18px; }
+
+.quick-action-btn {
+  width: 100%;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 15px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.quick-action-btn:last-child { margin-bottom: 0; }
+
+.quick-action-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  transform: translateY(-2px);
+}
+
+.quick-action-btn svg { width: 20px; height: 20px; }
+
+@media (max-width: 768px) {
+  .home-layout { flex-direction: column; }
+  .home-side { position: static; }
+}

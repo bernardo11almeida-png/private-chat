@@ -927,4 +927,4 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => console.log(`PrivateChat rodando em http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Synto rodando em http://localhost:${PORT}`));
