@@ -1251,8 +1251,8 @@ textarea:focus {
   z-index: 3;
 }
 .reactions-container:not(:empty) {
-  margin-top: 3px;
-  margin-bottom: 6px;
+  margin-top: -9px;   /* puxa pra cima, "mordendo" a bolha */
+  margin-bottom: -3px; /* não empurra a próxima mensagem pra baixo à toa */
   padding: 0 2px;
 }
 .reactions-container:empty { display: none; }
@@ -1363,6 +1363,14 @@ textarea:focus {
 .message-actions button { background: transparent; border: none; color: var(--text-muted); padding: 4px 6px; cursor: pointer; font-size: 14px; }
 .message-actions button:hover { color: var(--text); }
 .message-actions button.delete-btn:hover { color: var(--danger); }
+
+.message-actions button.quick-react-btn {
+  font-size: 14px;
+}
+.message-actions button.quick-react-btn img.emoji {
+  width: 16px;
+  height: 16px;
+}
 
 .server-message .message-actions { top: 4px; right: 4px; }
 

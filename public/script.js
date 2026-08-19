@@ -77,7 +77,7 @@ const EMOJI_MAP = {
   flag_br:'🇧🇷', flag_us:'🇺🇸'
 };
 
-const QUICK_EMOJIS = ['👍','❤️','😂','😮','😢','🙏','🔥','🎉','😍','🤔','😎','😭','👀','💯','🥰','😡','🤗','😭'];
+const QUICK_REACT_EMOJIS = ['👍', '❤️', '😂'];
 
 // Converte texto com unicode emoji para <img> Twemoji
 function toTwemoji(text) {
@@ -883,9 +883,6 @@ async function init() {
 
   // Fecha pickers/autocomplete ao clicar fora
   document.addEventListener('click', (e) => {
-    document.querySelectorAll('.emoji-quick-picker.show').forEach(p => {
-      if (!p.contains(e.target)) p.classList.remove('show');
-    });
     document.querySelectorAll('.emoji-ac:not(.hidden)').forEach(ac => {
       if (!ac.contains(e.target)) ac.classList.add('hidden');
     });
@@ -1393,7 +1390,6 @@ function appendMessage(message, prepend = false) {
 
   if (!message.deleted_at) {
     // Picker de reação + barra de ações (reação JUNTO de reply/delete)
-    wrapper.appendChild(buildEmojiPicker(message));
     wrapper.appendChild(buildMessageActions(message, 'dm', wrapper));
 
     // Reações: canto esquerdo inferior, várias simultâneas
@@ -1416,22 +1412,23 @@ function buildMessageActions(message, type, wrapper) {
   const actions = document.createElement('div');
   actions.className = 'message-actions';
 
-  // Botão de reação (agora junto dos outros)
-  const reactBtn = document.createElement('button');
-  reactBtn.title = 'Add Reaction';
-  reactBtn.innerHTML = toTwemoji('🙂');
-  reactBtn.onclick = (e) => {
-    e.stopPropagation();
-    const picker = wrapper.querySelector('.emoji-quick-picker');
-    if (!picker) return;
-    const isOpen = picker.classList.contains('show');
-    closeAllEmojiPickers();
-    if (!isOpen) {
-      positionEmojiPicker(picker, reactBtn);
-      picker.classList.add('show');
-    }
-  };
-  actions.appendChild(reactBtn);
+  // 3 reações rápidas — clicou, já reagiu
+  QUICK_REACT_EMOJIS.forEach(emoji => {
+    const reactBtn = document.createElement('button');
+    reactBtn.className = 'quick-react-btn';
+    reactBtn.innerHTML = toTwemoji(emoji);
+    reactBtn.title = 'Reagir com ' + emoji;
+    reactBtn.onclick = async (e) => {
+      e.stopPropagation();
+      try {
+        await api(`/messages/${message.id}/reactions`, {
+          method: 'POST',
+          body: JSON.stringify({ emoji })
+        });
+      } catch (err) { showToast(err.message, 'error'); }
+    };
+    actions.appendChild(reactBtn);
+  });
 
   // Reply
   const replyBtn = document.createElement('button');
@@ -1455,7 +1452,6 @@ function buildMessageActions(message, type, wrapper) {
           if (type === 'dm') {
             await api(`/messages/${message.id}`, { method: 'DELETE' });
           } else {
-            // Ajuste a rota se o seu backend for diferente
             await api(`/servers/${activeServer.id}/channels/${activeChannel.id}/messages/${message.id}`, { method: 'DELETE' });
           }
         } catch(e) { showToast(e.message, 'error'); }
