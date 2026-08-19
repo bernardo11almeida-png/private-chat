@@ -876,16 +876,18 @@ app.delete('/api/servers/:serverId/messages/:msgId', requireAuth, async (req, re
 
 // ---------- GIFs (Giphy API) ----------
 app.get('/api/gifs/search', requireAuth, async (req, res) => {
-  const { q } = req.query;
+  const { q, offset } = req.query;
+  const gifOffset = Math.max(0, parseInt(offset) || 0);
   try {
-    const response = await fetch(`https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q || 'hello')}&api_key=${process.env.GIPHY_API_KEY}&limit=24&rating=pg`);
+    const response = await fetch(`https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q || 'hello')}&api_key=${process.env.GIPHY_API_KEY}&limit=24&offset=${gifOffset}&rating=pg`);
     if (!response.ok) {
       console.error('Giphy respondeu com erro:', response.status, await response.text());
       return res.status(502).json({ error: 'Giphy indisponivel' });
     }
     const data = await response.json();
     const gifs = (data.data || []).map(g => g.images?.fixed_height?.url || g.images?.original?.url).filter(Boolean);
-    res.json({ gifs });
+    const totalCount = data.pagination?.total_count || 0;
+    res.json({ gifs, has_more: gifOffset + gifs.length < totalCount });
   } catch (e) {
     console.error('Giphy Error:', e);
     res.status(500).json({ error: 'Erro ao buscar GIFs' });

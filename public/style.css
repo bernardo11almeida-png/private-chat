@@ -1951,7 +1951,18 @@ img.emoji {
 .message-actions button img.emoji { pointer-events: none; }
 
 /* GIF nas mensagens */
-.msg-gif { max-width: 100%; border-radius: 8px; display: block; }
+/* GIF nas mensagens */
+.msg-gif { 
+  max-width: 100%; 
+  max-height: 250px; 
+  border-radius: 8px; 
+  display: block; 
+  cursor: pointer;
+  transition: opacity .15s ease;
+}
+.msg-gif:hover { 
+  opacity: 0.9; 
+}
 
 /* ===== Autocomplete de :emojis: ===== */
 .emoji-ac {
@@ -2857,4 +2868,53 @@ body.compact-mode .reactions-container:not(:empty) { margin-top: 1px; margin-bot
   .mockup-sidebar { width: 50px; }
   .landing-features-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
   .landing-feature-card { padding: 20px 14px; }
+}
+
+/* ===== GIF Picker Scroll Infinito ===== */
+.gif-grid {
+  scroll-behavior: smooth;
+}
+
+.gif-loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  gap: 8px;
+}
+
+.gif-loading-more .upload-spinner {
+  margin-right: 0;
+}
+
+.gif-end-message {
+  text-align: center;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+/* Indicador de scroll no GIF picker */
+.gif-scroll-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.7);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 10px;
+  font-size: 11px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 10;
+}
+
+.gif-scroll-hint.visible {
+  opacity: 1;
 }

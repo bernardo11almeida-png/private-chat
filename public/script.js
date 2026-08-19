@@ -1359,6 +1359,20 @@ async function openChat(friend) {
   }, 50);
 }
 
+// ================== GIF HELPER ==================
+function renderMessageContent(content) {
+  if (!content) return '';
+  
+  // GIF
+  if (content.startsWith('gif:')) {
+    const url = content.replace(/^gif:/, '');
+    return `<img class="msg-gif" src="${escapeHtml(url)}" alt="GIF" onclick="openLightbox(this.src)" loading="lazy" />`;
+  }
+  
+  // Se não for GIF, retorna o conteúdo processado com emojis (seu código original)
+  return parseEmojis(content);
+}
+
 function appendMessage(message, prepend = false) {
   if (!activeFriend) return;
   const messagesEl = document.getElementById('chat-messages');
@@ -1403,7 +1417,7 @@ function appendMessage(message, prepend = false) {
     bubble.innerHTML = renderFileMessage(message.content);
     wrapper.dataset.content = 'Arquivo';
   } else {
-    bubble.innerHTML = parseEmojis(message.content);
+    bubble.innerHTML = renderMessageContent(message.content);
     wrapper.dataset.content = message.content;
   }
   wrapper.appendChild(bubble);
@@ -1577,30 +1591,229 @@ function setupChatForm() {
   });
 }
 
+// ================== GIF PICKER DO CHAT (DM) ==================
+
+let chatGifState = {
+  query: '',
+  offset: 0,
+  loading: false,
+  hasMore: true,
+  mode: 'search'
+};
+
 function forceGifButton() {
-  const oldBtn = document.getElementById('open-gif-btn');
+  const gifBtn = document.getElementById('open-gif-btn');
   const picker = document.getElementById('gif-picker');
-  if (!oldBtn || !picker) return;
+  const searchInput = document.getElementById('gif-search-input');
+  const grid = document.getElementById('gif-grid');
+  const tabs = picker.querySelectorAll('[data-gif-tab]');
 
-  const btn = oldBtn.cloneNode(true);
-  oldBtn.parentNode.replaceChild(btn, oldBtn);
+  if (!gifBtn || !picker) return;
 
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
+  // Toggle picker
+  gifBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     picker.classList.toggle('hidden');
     if (!picker.classList.contains('hidden')) {
-      loadGifTab('search');
+      searchInput.focus();
+      // Carregar trending se não tem query
+      if (!chatGifState.query && grid.children.length === 0) {
+        loadChatGifs();
+      }
     }
   });
 
+  // Fechar ao clicar fora
   document.addEventListener('click', (e) => {
-    if (!picker.classList.contains('hidden') &&
-        !picker.contains(e.target) &&
-        e.target !== btn && !btn.contains(e.target)) {
+    if (!picker.contains(e.target) && e.target !== gifBtn) {
       picker.classList.add('hidden');
     }
   });
+
+  // Tabs
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      chatGifState.mode = tab.dataset.gifTab;
+      chatGifState.offset = 0;
+      chatGifState.hasMore = true;
+      searchInput.style.display = chatGifState.mode === 'fav' ? 'none' : '';
+      loadChatGifs();
+    });
+  });
+
+  // Busca com debounce
+  let searchTimeout;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      chatGifState.query = searchInput.value.trim();
+      chatGifState.offset = 0;
+      chatGifState.hasMore = true;
+      loadChatGifs();
+    }, 400);
+  });
+
+  // Scroll infinito
+  grid.addEventListener('scroll', () => {
+    const { scrollTop, scrollHeight, clientHeight } = grid;
+    
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+      if (chatGifState.mode === 'search' && chatGifState.hasMore && !chatGifState.loading) {
+        loadMoreChatGifs();
+      }
+    }
+  });
+}
+
+async function loadChatGifs() {
+  const grid = document.getElementById('gif-grid');
+  grid.innerHTML = '';
+
+  if (chatGifState.mode === 'fav') {
+    await loadChatFavGifs(grid);
+  } else {
+    await loadChatSearchGifs(grid, true);
+  }
+}
+
+async function loadChatSearchGifs(grid, reset = false) {
+  if (chatGifState.loading) return;
+  chatGifState.loading = true;
+
+  if (reset) {
+    grid.innerHTML = '<div class="gif-loading-more"><span class="upload-spinner"></span>Loading...</div>';
+  } else {
+    const loader = document.createElement('div');
+    loader.className = 'gif-loading-more';
+    loader.id = 'chat-gif-loader';
+    loader.innerHTML = '<span class="upload-spinner"></span>Loading more...';
+    grid.appendChild(loader);
+  }
+
+  try {
+    const { gifs, has_more } = await api(`/gifs/search?q=${encodeURIComponent(chatGifState.query || 'trending')}&offset=${chatGifState.offset}`);
+    
+    // Remover loaders
+    document.getElementById('chat-gif-loader')?.remove();
+    if (reset) grid.querySelector('.gif-loading-more')?.remove();
+
+    if (reset) grid.innerHTML = '';
+
+    if (gifs.length === 0) {
+      grid.innerHTML = '<div class="gif-end-message">No GIFs found</div>';
+      chatGifState.hasMore = false;
+      chatGifState.loading = false;
+      return;
+    }
+
+    gifs.forEach(url => {
+      grid.appendChild(createChatGifItem(url));
+    });
+
+    chatGifState.offset += gifs.length;
+    chatGifState.hasMore = has_more;
+
+    if (!has_more) {
+      const endMsg = document.createElement('div');
+      endMsg.className = 'gif-end-message';
+      endMsg.textContent = 'No more GIFs';
+      grid.appendChild(endMsg);
+    }
+
+  } catch (err) {
+    document.getElementById('chat-gif-loader')?.remove();
+    if (reset) {
+      grid.querySelector('.gif-loading-more')?.remove();
+      grid.innerHTML = `<div class="gif-end-message">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  chatGifState.loading = false;
+}
+
+async function loadMoreChatGifs() {
+  const grid = document.getElementById('gif-grid');
+  await loadChatSearchGifs(grid, false);
+}
+
+async function loadChatFavGifs(grid) {
+  grid.innerHTML = '<div class="gif-loading-more"><span class="upload-spinner"></span>Loading...</div>';
+  
+  try {
+    const { gifs } = await api('/gifs/favorites');
+    grid.innerHTML = '';
+
+    if (gifs.length === 0) {
+      grid.innerHTML = '<div class="gif-end-message">No favorites yet</div>';
+      return;
+    }
+
+    gifs.forEach(url => {
+      grid.appendChild(createChatGifItem(url, true));
+    });
+
+  } catch (err) {
+    grid.innerHTML = `<div class="gif-end-message">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function createChatGifItem(url, isFav = false) {
+  const item = document.createElement('div');
+  item.className = 'gif-item';
+  item.style.position = 'relative';
+
+  const img = document.createElement('img');
+  img.src = url;
+  img.loading = 'lazy';
+  img.alt = 'GIF';
+  img.addEventListener('click', () => {
+    // Inserir GIF no chat ativo
+    insertGifInChat(url);
+    document.getElementById('gif-picker').classList.add('hidden');
+  });
+
+  item.appendChild(img);
+
+  // Botão de favoritar
+  if (!isFav && chatGifState.mode === 'search') {
+    const favBtn = document.createElement('button');
+    favBtn.className = 'gif-fav-btn';
+    favBtn.innerHTML = '☆';
+    favBtn.title = 'Favorite';
+    favBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api('/gifs/favorites', { method: 'POST', body: JSON.stringify({ gif_url: url }) });
+        favBtn.innerHTML = '★';
+        favBtn.style.color = '#f0b232';
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+    item.appendChild(favBtn);
+  }
+
+  if (isFav) {
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'gif-fav-btn';
+    removeBtn.innerHTML = '★';
+    removeBtn.style.color = '#f0b232';
+    removeBtn.title = 'Remove';
+    removeBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api('/gifs/favorites', { method: 'DELETE', body: JSON.stringify({ gif_url: url }) });
+        item.remove();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+    item.appendChild(removeBtn);
+  }
+
+  return item;
 }
 
 async function loadGifTab(tab, query = 'hello') {
@@ -1886,85 +2099,367 @@ function setupImageLightbox() {
   });
 }
 
-// ================== GIF SELECT (AVATAR/BANNER) ==================
-let gifSelectTarget = null;
+// ================== GIF PICKER COM SCROLL INFINITO ==================
+
+let gifSearchState = {
+  query: '',
+  offset: 0,
+  loading: false,
+  hasMore: true,
+  mode: 'search' // 'search' ou 'fav'
+};
+
+let gifSelectState = {
+  query: '',
+  offset: 0,
+  loading: false,
+  hasMore: true,
+  mode: 'search',
+  callback: null
+};
 
 function setupGifSelectModal() {
-  document.getElementById('gif-select-close')?.addEventListener('click', closeGifSelectModal);
-  document.getElementById('gif-select-modal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'gif-select-modal') closeGifSelectModal();
-  });
-
-  document.querySelectorAll('[data-gif-select-tab]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-gif-select-tab]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      loadGifSelectTab(btn.dataset.gifSelectTab);
-    });
-  });
-
-  let searchTimeout;
-  document.getElementById('gif-select-search-input')?.addEventListener('input', (e) => {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => loadGifSelectTab('search', e.target.value), 500);
-  });
-}
-
-function openGifSelectModal(target) {
-  gifSelectTarget = target;
-  document.getElementById('gif-select-title').textContent = target === 'avatar' ? 'Choose a GIF avatar' : 'Choose a GIF banner';
-  document.getElementById('gif-select-error').textContent = '';
-  document.getElementById('gif-select-search-input').value = '';
-  document.querySelectorAll('[data-gif-select-tab]').forEach(b => b.classList.toggle('active', b.dataset.gifSelectTab === 'search'));
-  document.getElementById('gif-select-modal').classList.remove('hidden');
-  loadGifSelectTab('search');
-}
-
-function closeGifSelectModal() {
-  document.getElementById('gif-select-modal').classList.add('hidden');
-  gifSelectTarget = null;
-}
-
-async function loadGifSelectTab(tab, query = 'hello') {
+  const modal = document.getElementById('gif-select-modal');
+  const closeBtn = document.getElementById('gif-select-close');
+  const searchInput = document.getElementById('gif-select-search-input');
   const grid = document.getElementById('gif-select-grid');
-  grid.innerHTML = '<p class="muted small">Loading...</p>';
-  try {
-    let gifs = [];
-    if (tab === 'search') {
-      const res = await api(`/gifs/search?q=${encodeURIComponent(query)}`);
-      gifs = res.gifs || [];
-    } else {
-      const res = await api('/gifs/favorites');
-      gifs = res.gifs || [];
-    }
-    grid.innerHTML = '';
-    if (gifs.length === 0) {
-      grid.innerHTML = '<p class="muted small">No GIFs found.</p>';
-      return;
-    }
-    gifs.forEach(url => {
-      const img = document.createElement('img');
-      img.src = url;
-      img.onclick = () => confirmGifSelect(url);
-      grid.appendChild(img);
+  const tabs = modal.querySelectorAll('[data-gif-select-tab]');
+  const titleEl = document.getElementById('gif-select-title');
+  const errorEl = document.getElementById('gif-select-error');
+
+  closeBtn.addEventListener('click', () => {
+    modal.classList.add('hidden');
+    gifSelectState = { query: '', offset: 0, loading: false, hasMore: true, mode: 'search', callback: null };
+  });
+
+  // Tabs
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      gifSelectState.mode = tab.dataset.gifSelectTab;
+      gifSelectState.offset = 0;
+      gifSelectState.hasMore = true;
+      titleEl.textContent = gifSelectState.mode === 'fav' ? 'Favorite GIFs' : 'Choose a GIF';
+      searchInput.style.display = gifSelectState.mode === 'fav' ? 'none' : '';
+      loadGifSelectContent();
     });
-  } catch (err) {
-    grid.innerHTML = `<p class="form-error">${err.message}</p>`;
+  });
+
+  // Busca com debounce
+  let searchTimeout;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      gifSelectState.query = searchInput.value.trim();
+      gifSelectState.offset = 0;
+      gifSelectState.hasMore = true;
+      loadGifSelectContent();
+    }, 400);
+  });
+
+  // Scroll infinito
+  grid.addEventListener('scroll', () => {
+    const { scrollTop, scrollHeight, clientHeight } = grid;
+    
+    // Se chegou perto do final (dentro de 100px)
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+      if (gifSelectState.mode === 'search' && gifSelectState.hasMore && !gifSelectState.loading) {
+        loadMoreGifSelect();
+      }
+    }
+  });
+}
+
+function openGifSelectModal(target, callback) {
+  const modal = document.getElementById('gif-select-modal');
+  const grid = document.getElementById('gif-select-grid');
+  const searchInput = document.getElementById('gif-select-search-input');
+  const titleEl = document.getElementById('gif-select-title');
+  const errorEl = document.getElementById('gif-select-error');
+
+  gifSelectState = {
+    query: '',
+    offset: 0,
+    loading: false,
+    hasMore: true,
+    mode: 'search',
+    callback: callback || null,
+    target: target // 'avatar', 'banner', ou null para chat
+  };
+
+  // Reset UI
+  grid.innerHTML = '';
+  errorEl.textContent = '';
+  searchInput.value = '';
+  searchInput.style.display = '';
+  titleEl.textContent = 'Choose a GIF';
+
+  // Reset tabs
+  modal.querySelectorAll('[data-gif-select-tab]').forEach(t => {
+    t.classList.toggle('active', t.dataset.gifSelectTab === 'search');
+  });
+
+  modal.classList.remove('hidden');
+  searchInput.focus();
+
+  // Carregar GIFs populares iniciais
+  loadGifSelectContent();
+}
+
+async function loadGifSelectContent() {
+  const grid = document.getElementById('gif-select-grid');
+  const errorEl = document.getElementById('gif-select-error');
+  
+  grid.innerHTML = '';
+  errorEl.textContent = '';
+
+  if (gifSelectState.mode === 'fav') {
+    await loadFavoriteGifsSelect(grid, errorEl);
+  } else {
+    await loadSearchGifsSelect(grid, errorEl, true);
   }
 }
 
-async function confirmGifSelect(url) {
-  const target = gifSelectTarget;
-  if (!target) return;
+async function loadSearchGifsSelect(grid, errorEl, reset = false) {
+  if (gifSelectState.loading) return;
+  gifSelectState.loading = true;
+
+  if (reset) {
+    grid.innerHTML = '<div class="gif-loading-more"><span class="upload-spinner"></span>Loading...</div>';
+  } else {
+    // Adicionar indicador de loading no final
+    const loader = document.createElement('div');
+    loader.className = 'gif-loading-more';
+    loader.id = 'gif-select-loader';
+    loader.innerHTML = '<span class="upload-spinner"></span>Loading more...';
+    grid.appendChild(loader);
+  }
+
   try {
-    const endpoint = target === 'avatar' ? '/profile/avatar-url' : '/profile/banner-url';
-    const { user } = await api(endpoint, { method: 'PUT', body: JSON.stringify({ url }) });
+    const { gifs, has_more } = await api(`/gifs/search?q=${encodeURIComponent(gifSelectState.query || 'trending')}&offset=${gifSelectState.offset}`);
+    
+    // Remover loader
+    const loader = document.getElementById('gif-select-loader');
+    if (loader) loader.remove();
+
+    // Remover loading inicial
+    const initialLoader = grid.querySelector('.gif-loading-more');
+    if (initialLoader && reset) initialLoader.remove();
+
+    if (reset) grid.innerHTML = '';
+
+    if (gifs.length === 0) {
+      grid.innerHTML = '<div class="gif-end-message">No GIFs found</div>';
+      gifSelectState.hasMore = false;
+      return;
+    }
+
+    // Adicionar GIFs ao grid
+    gifs.forEach(url => {
+      grid.appendChild(createGifSelectItem(url));
+    });
+
+    gifSelectState.offset += gifs.length;
+    gifSelectState.hasMore = has_more;
+
+    // Mostrar mensagem de fim se não há mais
+    if (!has_more) {
+      const endMsg = document.createElement('div');
+      endMsg.className = 'gif-end-message';
+      endMsg.textContent = 'No more GIFs';
+      grid.appendChild(endMsg);
+    }
+
+  } catch (err) {
+    const loader = document.getElementById('gif-select-loader');
+    if (loader) loader.remove();
+    const initialLoader = grid.querySelector('.gif-loading-more');
+    if (initialLoader) initialLoader.remove();
+    
+    if (reset) {
+      errorEl.textContent = err.message;
+    }
+    gifSelectState.loading = false;
+  }
+
+  gifSelectState.loading = false;
+}
+
+async function loadMoreGifSelect() {
+  const grid = document.getElementById('gif-select-grid');
+  const errorEl = document.getElementById('gif-select-error');
+  await loadSearchGifsSelect(grid, errorEl, false);
+}
+
+async function loadFavoriteGifsSelect(grid, errorEl) {
+  grid.innerHTML = '<div class="gif-loading-more"><span class="upload-spinner"></span>Loading...</div>';
+  
+  try {
+    const { gifs } = await api('/gifs/favorites');
+    grid.innerHTML = '';
+
+    if (gifs.length === 0) {
+      grid.innerHTML = '<div class="gif-end-message">No favorite GIFs yet. Search and star some!</div>';
+      return;
+    }
+
+    gifs.forEach(url => {
+      grid.appendChild(createGifSelectItem(url, true));
+    });
+
+  } catch (err) {
+    grid.innerHTML = '';
+    errorEl.textContent = err.message;
+  }
+}
+
+function createGifSelectItem(url, isFav = false) {
+  const item = document.createElement('div');
+  item.className = 'gif-item';
+  item.style.position = 'relative';
+
+  const img = document.createElement('img');
+  img.src = url;
+  img.loading = 'lazy';
+  img.alt = 'GIF';
+  img.addEventListener('click', () => handleGifSelect(url));
+
+  item.appendChild(img);
+
+  // Botão de favoritar (apenas no modo search)
+  if (!isFav && gifSelectState.mode === 'search') {
+    const favBtn = document.createElement('button');
+    favBtn.className = 'gif-fav-btn';
+    favBtn.innerHTML = '☆';
+    favBtn.title = 'Add to favorites';
+    favBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api('/gifs/favorites', { method: 'POST', body: JSON.stringify({ gif_url: url }) });
+        favBtn.innerHTML = '★';
+        favBtn.style.color = '#f0b232';
+        favBtn.title = 'Added to favorites';
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+    item.appendChild(favBtn);
+  }
+
+  // Botão de remover dos favoritos
+  if (isFav) {
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'gif-fav-btn';
+    removeBtn.innerHTML = '★';
+    removeBtn.style.color = '#f0b232';
+    removeBtn.title = 'Remove from favorites';
+    removeBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api('/gifs/favorites', { method: 'DELETE', body: JSON.stringify({ gif_url: url }) });
+        item.remove();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+    item.appendChild(removeBtn);
+  }
+
+  return item;
+}
+
+function handleGifSelect(url) {
+  const modal = document.getElementById('gif-select-modal');
+  const target = gifSelectState.target;
+
+  if (target === 'avatar') {
+    // Definir GIF como avatar
+    document.getElementById('avatar-gif-btn').dataset.gifUrl = url;
+    setGifAsAvatar(url);
+  } else if (target === 'banner') {
+    // Definir GIF como banner
+    setGifAsBanner(url);
+  } else {
+    // Inserir no chat (DM ou Servidor)
+    insertGifInChat(url);
+  }
+
+  modal.classList.add('hidden');
+}
+
+async function setGifAsAvatar(url) {
+  try {
+    showToast('Setting avatar...', 'info');
+    const { user } = await api('/profile/avatar-url', {
+      method: 'PUT',
+      body: JSON.stringify({ url })
+    });
     currentUser = user;
     renderProfile();
     fillSettingsForm();
-    closeGifSelectModal();
+    showToast('Avatar updated!', 'success');
   } catch (err) {
-    document.getElementById('gif-select-error').textContent = err.message;
+    showToast(err.message, 'error');
+  }
+}
+
+async function setGifAsBanner(url) {
+  try {
+    showToast('Setting banner...', 'info');
+    const { user } = await api('/profile/banner-url', {
+      method: 'PUT',
+      body: JSON.stringify({ url })
+    });
+    currentUser = user;
+    renderProfile();
+    fillSettingsForm();
+    showToast('Banner updated!', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function insertGifInChat(url) {
+  // Verificar se estamos no chat DM ou no chat do servidor
+  const dmInput = document.getElementById('chat-input');
+  const serverInput = document.getElementById('server-chat-input');
+
+  if (dmInput && !dmInput.closest('.hidden')) {
+    // Está no chat DM
+    sendGifMessage(url, 'dm');
+  } else if (serverInput && !serverInput.closest('.hidden')) {
+    // Está no chat do servidor
+    sendGifMessage(url, 'server');
+  } else {
+    showToast('Open a chat first', 'error');
+  }
+}
+
+async function sendGifMessage(url, chatType) {
+  try {
+    if (chatType === 'dm' && activeFriend) {
+      const { message } = await api('/messages', {
+        method: 'POST',
+        body: JSON.stringify({
+          receiver_id: activeFriend.id,
+          content: `gif:${url}`
+        })
+      });
+      // A mensagem já será recebida via socket, não precisa adicionar manualmente
+    } else if (chatType === 'server' && activeServer && activeChannel) {
+      const { message } = await api(`/servers/${activeServer.id}/channels/${activeChannel.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({
+          content: `gif:${url}`
+        })
+      });
+      // A mensagem já será recebida via socket
+    } else {
+      showToast('Open a chat first', 'error');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
   }
 }
 
