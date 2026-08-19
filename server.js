@@ -14,6 +14,7 @@ const supabase = require('./db');
 const { generateSerialId } = require('./serialId');
 
 const app = express();
+app.set('trust proxy', 1); // ADICIONE ESTA LINHA (Resolve o problema do IP global)
 const server = http.createServer(app);
 const io = new Server(server);
 
@@ -41,12 +42,14 @@ const loginLimiter = rateLimit({
   message: { error: 'Muitas tentativas. Tente novamente em alguns minutos.' }
 });
 
-// ---------- Rate limiting para Mensagens ----------
+// ---------- Rate limiting por USUÁRIO (Account-based) ----------
 const messageLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
-  limit: 30, // Máximo de 30 mensagens por minuto por IP
+  limit: (req, res) => 30, // 30 requisições por minuto
   standardHeaders: true,
   legacyHeaders: false,
+  // Usa o ID do usuário logado como chave. Se não estiver logado, usa o IP.
+  keyGenerator: (req, res) => req.session.userId || req.ip,
   message: { error: 'You are sending messages too fast. Please slow down.' }
 });
 
