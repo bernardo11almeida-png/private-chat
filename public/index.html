@@ -247,10 +247,17 @@
                     </div>
                     <button type="button" id="cancel-reply-btn-server" class="btn-secondary" style="padding: 4px 8px;">✖</button>
                   </div>
-                  <form id="server-chat-form" class="chat-input-row">
-                    <input type="text" id="server-chat-input" maxlength="4000" placeholder="Message" autocomplete="off" />
-                    <button type="submit" aria-label="Send message">➤</button>
-                  </form>
+                  <div id="file-upload-bar-server" class="file-upload-bar hidden">
+                    <div><span class="upload-spinner"></span><span id="file-upload-name-server"></span></div>
+                  </div>
+                    <form id="server-chat-form" class="chat-input-row">
+                      <button type="button" id="open-file-btn-server" class="btn-secondary" title="Enviar arquivo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                      </button>
+                      <input type="file" id="file-input-server" hidden multiple />
+                      <input type="text" id="server-chat-input" maxlength="4000" placeholder="Message" autocomplete="off" />
+                      <button type="submit" aria-label="Send message">➤</button>
+                    </form>
                   <div id="chat-locked-notice" class="chat-locked hidden" style="padding: 16px; text-align: center; border-top: 1px solid var(--border); color: var(--text-muted); background: var(--bg-elevated-2); font-size: 14px;">
                     🔒 You don't have permission to send messages in this channel.
                   </div>
@@ -571,11 +578,14 @@
 
   <div id="image-lightbox" class="lightbox-backdrop hidden">
     <div class="lightbox-toolbar">
-      <button id="lightbox-copy" class="lightbox-btn" title="Copy link" type="button">🔗</button>
-      <button id="lightbox-download" class="lightbox-btn" title="Download" type="button">⬇</button>
-      <button id="lightbox-close" class="lightbox-btn" title="Close" type="button">✖</button>
+      <button id="lightbox-download" class="lightbox-btn" title="Download" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+      <button id="lightbox-close" class="lightbox-btn" title="Close (Esc)" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
-    <img id="lightbox-img" class="lightbox-img" src="" alt="" />
+    <img id="lightbox-img" class="lightbox-img" src="" alt="" draggable="false" />
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js"></script>

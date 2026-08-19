@@ -1,10 +1,6 @@
-// ========================================
-// SERVER.JS — Synto Backend
-// ========================================
-
+// server.js
 require('dotenv').config();
-console.log('GIPHY_API_KEY carregada:', process.env.GIPHY_API_KEY ? 'SIM (' + process.env.GIPHY_API_KEY.slice(0, 4) + '...)' : 'NAO');
-
+console.log('GIPHY_API_KEY carregada:', process.env.GIPHY_API_KEY ? 'SIM (' + process.env.GIPHY_API_KEY.slice(0,4) + '...)' : 'NAO');
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
@@ -18,16 +14,13 @@ const supabase = require('./db');
 const { generateSerialId } = require('./serialId');
 
 const app = express();
-app.set('trust proxy', 1);
-
+app.set('trust proxy', 1); // ADICIONE ESTA LINHA (Resolve o problema do IP global)
 const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 const VALID_STATUSES = ['online', 'away', 'busy', 'invisible'];
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
 
-// ---------- Middlewares ----------
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -40,7 +33,7 @@ const sessionMiddleware = session({
 app.use(sessionMiddleware);
 io.engine.use(sessionMiddleware);
 
-// ---------- Rate Limiting ----------
+// ---------- Rate limiting ----------
 const loginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   limit: 15,
@@ -49,16 +42,17 @@ const loginLimiter = rateLimit({
   message: { error: 'Muitas tentativas. Tente novamente em alguns minutos.' }
 });
 
+// ---------- Rate limiting por USUÁRIO (Account-based) ----------
 const messageLimiter = rateLimit({
-  windowMs: 10 * 1000,
-  limit: 8,
+  windowMs: 10 * 1000, // Janela de 10 segundos
+  limit: (req, res) => 8, // Máximo de 8 mensagens a cada 10 segundos
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.session.userId || req.ip,
+  keyGenerator: (req, res) => req.session.userId || req.ip,
   message: { error: 'You are sending messages too fast. Please wait a moment.' }
 });
 
-// ---------- Upload: Imagens (avatar, banner, server icon) ----------
+// ---------- Uploads (memória -> Supabase Storage) ----------
 const ALLOWED_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -71,8 +65,29 @@ const upload = multer({
   limits: { fileSize: 8 * 1024 * 1024 }
 });
 
-// ---------- Upload: Anexos de mensagem (qualquer arquivo seguro) ----------
+async function uploadToSupabase(bucket, fileBuffer, fileName, mimetype) {
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, fileBuffer, { contentType: mimetype, upsert: false });
+  
+  if (error) throw new Error('Erro ao salvar imagem');
+  return supabase.storage.from(bucket).getPublicUrl(fileName).data.publicUrl;
+}
+
+async function deleteOldUpload(url) {
+  if (!url) return;
+  try {
+    const match = url.match(/\/public\/([a-zA-Z]+)\/(.+)$/);
+    if (match) {
+      const bucket = match[1];
+      const filePath = match[2];
+      await supabase.storage.from(bucket).remove([filePath]);
+    }
+  } catch (err) { /* ignora */ }
+}
+
 const BLOCKED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.sh', '.msi', '.js', '.jar', '.com', '.scr', '.vbs', '.ps1'];
+
 const uploadAttachment = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
@@ -84,25 +99,6 @@ const uploadAttachment = multer({
   },
   limits: { fileSize: 25 * 1024 * 1024 }
 });
-
-// ---------- Supabase Storage Helpers ----------
-async function uploadToSupabase(bucket, fileBuffer, fileName, mimetype) {
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(fileName, fileBuffer, { contentType: mimetype, upsert: false });
-  if (error) throw new Error('Erro ao salvar arquivo');
-  return supabase.storage.from(bucket).getPublicUrl(fileName).data.publicUrl;
-}
-
-async function deleteOldUpload(url) {
-  if (!url) return;
-  try {
-    const match = url.match(/\/public\/([a-zA-Z]+)\/(.+)$/);
-    if (match) {
-      await supabase.storage.from(match[1]).remove([match[2]]);
-    }
-  } catch (err) { /* ignora */ }
-}
 
 // ---------- Helpers ----------
 function publicUser(row) {
@@ -150,10 +146,7 @@ async function removeFriendshipAndRequests(userA, userB) {
     .or(`and(sender_id.eq.${userA},receiver_id.eq.${userB}),and(sender_id.eq.${userB},receiver_id.eq.${userA})`);
 }
 
-// ========================================
-// AUTH
-// ========================================
-
+// ---------- Auth ----------
 app.post('/api/register', loginLimiter, async (req, res) => {
   const { username, password, display_name } = req.body;
   if (!username || !password || !display_name) return res.status(400).json({ error: 'Preencha tudo' });
@@ -170,11 +163,11 @@ app.post('/api/register', loginLimiter, async (req, res) => {
     .insert({ serial_id: serial, username, display_name, password: hashed, avatar: '', bio: '' })
     .select().single();
 
-  if (error) {
+    if (error) {
     console.error('Erro ao registrar:', error);
-    return res.status(500).json({ error: 'Erro ao registrar' });
-  }
-
+      return res.status(500).json({ error: 'Erro ao registrar' });
+    }
+  
   req.session.userId = newUser.id;
   res.json({ user: publicUser(newUser) });
 });
@@ -196,15 +189,12 @@ app.get('/api/me', requireAuth, async (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
-// ========================================
-// CONTA & SENHA
-// ========================================
-
+// ---------- Senha e Conta ----------
 app.put('/api/account/security-question', requireAuth, async (req, res) => {
   const { question, answer } = req.body;
   if (!question || !answer) return res.status(400).json({ error: 'Preencha os dados' });
-  const hash = bcrypt.hashSync(answer.trim().toLowerCase(), 10);
-  await supabase.from('users').update({ security_question: question.trim(), security_answer_hash: hash }).eq('id', req.session.userId);
+  const answerHash = bcrypt.hashSync(answer.trim().toLowerCase(), 10);
+  await supabase.from('users').update({ security_question: question.trim(), security_answer_hash: answerHash }).eq('id', req.session.userId);
   res.json({ ok: true });
 });
 
@@ -221,7 +211,8 @@ app.post('/api/account/reset-password', loginLimiter, async (req, res) => {
   const { data: user } = await supabase.from('users').select('*').eq('username', username).maybeSingle();
   if (!user || !user.security_answer_hash) return res.status(404).json({ error: 'Sem pergunta cadastrada' });
   if (!bcrypt.compareSync((answer || '').trim().toLowerCase(), user.security_answer_hash)) return res.status(401).json({ error: 'Resposta incorreta' });
-  await supabase.from('users').update({ password: bcrypt.hashSync(new_password, 10) }).eq('id', user.id);
+  const hashed = bcrypt.hashSync(new_password, 10);
+  await supabase.from('users').update({ password: hashed }).eq('id', user.id);
   res.json({ ok: true });
 });
 
@@ -230,7 +221,8 @@ app.put('/api/account/password', requireAuth, async (req, res) => {
   if (!new_password || new_password.length < 4) return res.status(400).json({ error: 'Senha curta' });
   const { data: user } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
   if (!bcrypt.compareSync(current_password || '', user.password)) return res.status(401).json({ error: 'Senha atual incorreta' });
-  await supabase.from('users').update({ password: bcrypt.hashSync(new_password, 10) }).eq('id', req.session.userId);
+  const hashed = bcrypt.hashSync(new_password, 10);
+  await supabase.from('users').update({ password: hashed }).eq('id', req.session.userId);
   res.json({ ok: true });
 });
 
@@ -239,6 +231,7 @@ app.delete('/api/account', requireAuth, async (req, res) => {
   const { data: user } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
   if (!bcrypt.compareSync(password || '', user.password)) return res.status(401).json({ error: 'Senha incorreta' });
   const uid = req.session.userId;
+  
   await deleteOldUpload(user.avatar);
   await deleteOldUpload(user.banner);
   await supabase.from('messages').delete().or(`sender_id.eq.${uid},receiver_id.eq.${uid}`);
@@ -247,13 +240,11 @@ app.delete('/api/account', requireAuth, async (req, res) => {
   await supabase.from('blocks').delete().or(`blocker_id.eq.${uid},blocked_id.eq.${uid}`);
   await supabase.from('friend_meta').delete().or(`owner_id.eq.${uid},friend_id.eq.${uid}`);
   await supabase.from('users').delete().eq('id', uid);
+
   req.session.destroy(() => res.json({ ok: true }));
 });
 
-// ========================================
-// STATUS
-// ========================================
-
+// ---------- Status ----------
 app.put('/api/status', requireAuth, async (req, res) => {
   const { status } = req.body;
   if (!VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Status invalido' });
@@ -262,24 +253,30 @@ app.put('/api/status', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ========================================
-// PERFIL
-// ========================================
+// ---------- Perfil ----------
 
 app.put('/api/profile', requireAuth, async (req, res) => {
   const { display_name, bio } = req.body;
   try {
     const { data: current } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
+    
     const { data: updated, error } = await supabase.from('users')
       .update({
         display_name: display_name ?? current.display_name,
         bio: bio ?? current.bio
       })
       .eq('id', req.session.userId)
-      .select().single();
-    if (error) return res.status(500).json({ error: 'Banco de dados recusou a alteracao.' });
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Erro Supabase ao salvar perfil:', error);
+      return res.status(500).json({ error: 'Banco de dados recusou a alteração.' });
+    }
+
     res.json({ user: publicUser(updated) });
   } catch (err) {
+    console.error('Erro interno ao salvar perfil:', err);
     res.status(500).json({ error: 'Erro interno no servidor.' });
   }
 });
@@ -303,10 +300,6 @@ app.put('/api/profile/banner-url', requireAuth, async (req, res) => {
   const { data: updated } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
   res.json({ user: publicUser(updated) });
 });
-
-// ========================================
-// UPLOADS
-// ========================================
 
 app.post('/api/upload/avatar', requireAuth, (req, res) => {
   upload.single('avatar')(req, res, async (err) => {
@@ -376,42 +369,6 @@ app.delete('/api/upload/banner', requireAuth, async (req, res) => {
   res.json({ user: publicUser(updated) });
 });
 
-// ========================================
-// DOWNLOAD PROXY (para arquivos que nao sao imagem/gif/video)
-// ========================================
-
-app.get('/api/download', requireAuth, async (req, res) => {
-  const { url, name } = req.query;
-  if (!url) return res.status(400).json({ error: 'URL obrigatoria' });
-
-  // Seguranca: so permite URLs do proprio bucket Supabase
-  const allowedPrefix = `${SUPABASE_URL}/storage/v1/object/public/`;
-  if (SUPABASE_URL && !url.startsWith(allowedPrefix)) {
-    return res.status(400).json({ error: 'URL nao permitida' });
-  }
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return res.status(502).json({ error: 'Falha ao baixar arquivo' });
-
-    const contentType = response.headers.get('content-type') || 'application/octet-stream';
-    const buffer = await response.arrayBuffer();
-    const safeName = (name || 'download').replace(/[^\w.\-]/g, '_');
-
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeName)}"`);
-    res.setHeader('Content-Length', buffer.byteLength);
-    res.send(Buffer.from(buffer));
-  } catch (e) {
-    console.error('Download proxy error:', e);
-    res.status(500).json({ error: 'Erro ao baixar arquivo' });
-  }
-});
-
-// ========================================
-// USUARIOS
-// ========================================
-
 app.get('/api/users/:id', requireAuth, async (req, res) => {
   const { data: user } = await supabase.from('users').select('*').eq('id', Number(req.params.id)).maybeSingle();
   if (!user) return res.status(404).json({ error: 'Usuario nao encontrado' });
@@ -426,10 +383,7 @@ app.get('/api/users/search', requireAuth, async (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
-// ========================================
-// BLOQUEIOS
-// ========================================
-
+// ---------- Bloqueios ----------
 app.post('/api/block', requireAuth, async (req, res) => {
   const targetId = Number(req.body.user_id);
   if (targetId === req.session.userId) return res.status(400).json({ error: 'Nao pode bloquear a si mesmo' });
@@ -450,13 +404,11 @@ app.get('/api/blocks', requireAuth, async (req, res) => {
     .from('blocks')
     .select('blocked_id, users:users!blocks_blocked_id_fkey(id, serial_id, username, display_name, avatar)')
     .eq('blocker_id', req.session.userId);
-  res.json({ blocked: (blocked || []).map(b => b.users).filter(Boolean) });
+  const formatted = (blocked || []).map(b => b.users).filter(Boolean);
+  res.json({ blocked: formatted });
 });
 
-// ========================================
-// AMIGOS
-// ========================================
-
+// ---------- Amigos ----------
 app.post('/api/friends/request', requireAuth, async (req, res) => {
   const { serial_id } = req.body;
   const { data: target } = await supabase.from('users').select('*').eq('serial_id', (serial_id || '').trim()).maybeSingle();
@@ -464,11 +416,13 @@ app.post('/api/friends/request', requireAuth, async (req, res) => {
   if (target.id === req.session.userId) return res.status(400).json({ error: 'Nao pode adicionar a si mesmo' });
   if (await isBlocked(req.session.userId, target.id)) return res.status(403).json({ error: 'Bloqueado' });
   if (await areFriends(req.session.userId, target.id)) return res.status(409).json({ error: 'Ja sao amigos' });
+  
   const { data: pending } = await supabase.from('friend_requests')
     .select('id').eq('status', 'pending')
     .or(`and(sender_id.eq.${req.session.userId},receiver_id.eq.${target.id}),and(sender_id.eq.${target.id},receiver_id.eq.${req.session.userId})`)
     .maybeSingle();
   if (pending) return res.status(409).json({ error: 'Ja existe solicitacao pendente' });
+
   await supabase.from('friend_requests').insert({ sender_id: req.session.userId, receiver_id: target.id, status: 'pending' });
   res.json({ ok: true });
 });
@@ -478,7 +432,9 @@ app.get('/api/friends/requests', requireAuth, async (req, res) => {
     .from('friend_requests')
     .select('id, users:sender_id(id, serial_id, username, display_name, avatar, banner)')
     .eq('receiver_id', req.session.userId).eq('status', 'pending');
-  res.json({ requests: (requests || []).map(r => ({ request_id: r.id, ...r.users })) });
+  
+  const formatted = (requests || []).map(r => ({ request_id: r.id, ...r.users }));
+  res.json({ requests: formatted });
 });
 
 app.get('/api/friends/requests/outgoing', requireAuth, async (req, res) => {
@@ -486,7 +442,9 @@ app.get('/api/friends/requests/outgoing', requireAuth, async (req, res) => {
     .from('friend_requests')
     .select('id, users:receiver_id(id, serial_id, username, display_name, avatar)')
     .eq('sender_id', req.session.userId).eq('status', 'pending');
-  res.json({ requests: (requests || []).map(r => ({ request_id: r.id, ...r.users })) });
+  
+  const formatted = (requests || []).map(r => ({ request_id: r.id, ...r.users }));
+  res.json({ requests: formatted });
 });
 
 app.post('/api/friends/cancel', requireAuth, async (req, res) => {
@@ -549,10 +507,7 @@ app.put('/api/friends/:friendId/meta', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ========================================
-// MENSAGENS (DM)
-// ========================================
-
+// ---------- Mensagens ----------
 const MESSAGES_PAGE_SIZE = 50;
 
 app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
@@ -560,12 +515,12 @@ app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
   const before = req.query.before ? Number(req.query.before) : null;
   if (!await areFriends(req.session.userId, friendId)) return res.status(403).json({ error: 'Nao sao amigos' });
 
-  let query = supabase.from('messages').select('*, reply_to, deleted_at, image')
+  let query = supabase.from('messages').select('*, reply_to, deleted_at, image') // Adicionado deleted_at e image aqui
     .or(`and(sender_id.eq.${req.session.userId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${req.session.userId})`)
     .order('id', { ascending: false })
     .limit(MESSAGES_PAGE_SIZE);
   if (before) query = query.lt('id', before);
-
+  
   const { data: rows } = await query;
   rows.reverse();
 
@@ -578,9 +533,12 @@ app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
 });
 
 app.post('/api/messages', requireAuth, messageLimiter, async (req, res) => {
-  const sender_id = req.session.userId;
+  // 1. Autenticação já feita pelo requireAuth (usa a sessão, não confia no cliente)
+  const sender_id = req.session.userId; 
+  
+  // 2. Validação de Input
   const { receiver_id, content, reply_to } = req.body;
-
+  
   if (!content || typeof content !== 'string' || !content.trim()) {
     return res.status(400).json({ error: 'Mensagem vazia ou invalida' });
   }
@@ -591,13 +549,15 @@ app.post('/api/messages', requireAuth, messageLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Destinatario invalido' });
   }
 
+  // 3. Autorização (Verifica se são amigos e se não estão bloqueados)
   if (!await areFriends(sender_id, Number(receiver_id))) return res.status(403).json({ error: 'Nao sao amigos' });
   if (await isBlocked(sender_id, Number(receiver_id))) return res.status(403).json({ error: 'Bloqueado' });
 
+  // 4. Inserção segura no banco (Apenas os campos necessários)
   const { data: message, error } = await supabase.from('messages')
-    .insert({
-      sender_id: sender_id,
-      receiver_id: Number(receiver_id),
+    .insert({ 
+      sender_id: sender_id, 
+      receiver_id: Number(receiver_id), 
       content: content.trim(),
       reply_to: reply_to ? Number(reply_to) : null
     })
@@ -632,56 +592,39 @@ app.delete('/api/messages/:id', requireAuth, async (req, res) => {
   const { data: message } = await supabase.from('messages').select('*').eq('id', Number(req.params.id)).maybeSingle();
   if (!message || message.sender_id !== req.session.userId) return res.status(404).json({ error: 'Nao encontrada' });
 
-  await supabase.from('messages').update({ content: 'Mensagem apagada', image: null, deleted_at: new Date().toISOString() }).eq('id', message.id);
+  const { error } = await supabase.from('messages').update({ content: 'Mensagem apagada', image: null, deleted_at: new Date().toISOString() }).eq('id', message.id);
+  
+  if (error) {
+    console.error('Erro do Supabase ao deletar DM:', error);
+    return res.status(500).json({ error: 'O banco de dados recusou a exclusão. Verifique se a coluna deleted_at existe.' });
+  }
+
   io.to('user:' + message.receiver_id).emit('message_deleted', { messageId: message.id });
   io.to('user:' + message.sender_id).emit('message_deleted', { messageId: message.id });
   res.json({ ok: true });
 });
 
-// ========================================
-// REACOES
-// ========================================
-
-app.post('/api/messages/:id/reactions', requireAuth, async (req, res) => {
-  const msgId = Number(req.params.id);
-  const { emoji } = req.body;
-  const { data: msg } = await supabase.from('messages').select('sender_id, receiver_id').eq('id', msgId).maybeSingle();
-  if (!msg) return res.status(404).json({ error: 'Mensagem nao encontrada' });
-
-  const { data: existing } = await supabase.from('message_reactions')
-    .select('id').eq('message_id', msgId).eq('user_id', req.session.userId).eq('emoji', emoji).maybeSingle();
-
-  if (existing) {
-    await supabase.from('message_reactions').delete().eq('id', existing.id);
-    io.to('user:' + msg.sender_id).emit('reaction_removed', { messageId: msgId, emoji, userId: req.session.userId });
-    io.to('user:' + msg.receiver_id).emit('reaction_removed', { messageId: msgId, emoji, userId: req.session.userId });
-    res.json({ ok: true, action: 'removed' });
-  } else {
-    await supabase.from('message_reactions').insert({ message_id: msgId, user_id: req.session.userId, emoji });
-    io.to('user:' + msg.sender_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId });
-    io.to('user:' + msg.receiver_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId });
-    res.json({ ok: true, action: 'added' });
-  }
-});
-
-// ========================================
-// SERVIDORES
-// ========================================
-
+// ---------- Servidores ----------
 app.post('/api/servers', requireAuth, async (req, res) => {
   const { name } = req.body;
   if (!name || name.trim().length < 3) return res.status(400).json({ error: 'Nome do servidor muito curto' });
+  
   const inviteCode = Math.random().toString(36).substring(2, 10);
   const { data: server, error } = await supabase.from('servers')
     .insert({ name: name.trim(), owner_id: req.session.userId, invite_code: inviteCode })
     .select().single();
+  
   if (error) return res.status(500).json({ error: 'Erro ao criar servidor' });
+  
   await supabase.from('server_members').insert({ server_id: server.id, user_id: req.session.userId });
+  
   const { data: role } = await supabase.from('server_roles')
     .insert({ server_id: server.id, name: '@everyone', color: '#99aab5', position: 0 })
     .select().single();
   await supabase.from('server_member_roles').insert({ server_id: server.id, user_id: req.session.userId, role_id: role.id });
+
   await supabase.from('server_channels').insert({ server_id: server.id, name: 'geral', position: 0 });
+  
   res.json({ server });
 });
 
@@ -689,11 +632,16 @@ app.post('/api/servers/join', requireAuth, async (req, res) => {
   const { invite_code } = req.body;
   const { data: server } = await supabase.from('servers').select('*').eq('invite_code', invite_code.trim()).maybeSingle();
   if (!server) return res.status(404).json({ error: 'Servidor nao encontrado' });
-  const { data: existing } = await supabase.from('server_members').select('id').eq('server_id', server.id).eq('user_id', req.session.userId).maybeSingle();
+  
+  const { data: existing } = await supabase.from('server_members').select('id')
+    .eq('server_id', server.id).eq('user_id', req.session.userId).maybeSingle();
   if (existing) return res.status(409).json({ error: 'Voce ja esta nesse servidor' });
+  
   await supabase.from('server_members').insert({ server_id: server.id, user_id: req.session.userId });
   const { data: everyoneRole } = await supabase.from('server_roles').select('id').eq('server_id', server.id).eq('name', '@everyone').maybeSingle();
-  if (everyoneRole) await supabase.from('server_member_roles').insert({ server_id: server.id, user_id: req.session.userId, role_id: everyoneRole.id });
+  if (everyoneRole) {
+    await supabase.from('server_member_roles').insert({ server_id: server.id, user_id: req.session.userId, role_id: everyoneRole.id });
+  }
   res.json({ server });
 });
 
@@ -701,7 +649,8 @@ app.get('/api/servers', requireAuth, async (req, res) => {
   const { data: members } = await supabase.from('server_members')
     .select('server_id, servers:servers!server_members_server_id_fkey(*)')
     .eq('user_id', req.session.userId);
-  res.json({ servers: (members || []).map(m => m.servers).filter(Boolean) });
+  const servers = (members || []).map(m => m.servers).filter(Boolean);
+  res.json({ servers });
 });
 
 app.put('/api/servers/:id', requireAuth, async (req, res) => {
@@ -709,6 +658,7 @@ app.put('/api/servers/:id', requireAuth, async (req, res) => {
   const { name } = req.body;
   const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
   if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+  
   await supabase.from('servers').update({ name: name.trim() }).eq('id', serverId);
   const { data: updated } = await supabase.from('servers').select('*').eq('id', serverId).maybeSingle();
   res.json({ server: updated });
@@ -720,14 +670,17 @@ app.post('/api/servers/:id/icon', requireAuth, upload.single('icon'), async (req
     const { data: server } = await supabase.from('servers').select('owner_id, icon_url').eq('id', serverId).maybeSingle();
     if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo' });
+
     if (server.icon_url) await deleteOldUpload(server.icon_url);
     const fileName = `server-${serverId}-${Date.now()}${path.extname(req.file.originalname) || '.png'}`;
     const publicUrl = await uploadToSupabase('servers', req.file.buffer, fileName, req.file.mimetype);
+    
     await supabase.from('servers').update({ icon_url: publicUrl }).eq('id', serverId);
     const { data: updated } = await supabase.from('servers').select('*').eq('id', serverId).maybeSingle();
     res.json({ server: updated });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao salvar imagem.' });
+    console.error('Erro no upload do ícone:', error);
+    res.status(500).json({ error: 'Erro ao salvar imagem. Verifique se o bucket "servers" existe no Supabase.' });
   }
 });
 
@@ -735,6 +688,7 @@ app.get('/api/servers/:id/data', requireAuth, async (req, res) => {
   const serverId = Number(req.params.id);
   const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
   if (!member) return res.status(403).json({ error: 'Voce nao esta nesse servidor' });
+
   const { data: channels } = await supabase.from('server_channels').select('*').eq('server_id', serverId).order('position', { ascending: true });
   const { data: roles } = await supabase.from('server_roles').select('*').eq('server_id', serverId).order('position', { ascending: true });
   const { data: members } = await supabase.from('server_members')
@@ -742,6 +696,7 @@ app.get('/api/servers/:id/data', requireAuth, async (req, res) => {
     .eq('server_id', serverId);
   const { data: memberRoles } = await supabase.from('server_member_roles').select('user_id, role_id').eq('server_id', serverId);
   const { data: overrides } = await supabase.from('channel_role_permissions').select('channel_id, role_id, can_send_messages').in('channel_id', (channels || []).map(c => c.id));
+
   res.json({ channels, roles, members, memberRoles, overrides });
 });
 
@@ -750,8 +705,10 @@ app.put('/api/channels/:id', requireAuth, async (req, res) => {
   const { name } = req.body;
   const { data: channel } = await supabase.from('server_channels').select('server_id').eq('id', channelId).maybeSingle();
   if (!channel) return res.status(404).json({ error: 'Canal nao encontrado' });
+  
   const { data: server } = await supabase.from('servers').select('owner_id').eq('id', channel.server_id).maybeSingle();
   if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+
   await supabase.from('server_channels').update({ name: name.trim().toLowerCase().replace(/\s+/g, '-') }).eq('id', channelId);
   res.json({ ok: true });
 });
@@ -760,8 +717,10 @@ app.delete('/api/channels/:id', requireAuth, async (req, res) => {
   const channelId = Number(req.params.id);
   const { data: channel } = await supabase.from('server_channels').select('server_id').eq('id', channelId).maybeSingle();
   if (!channel) return res.status(404).json({ error: 'Canal nao encontrado' });
+  
   const { data: server } = await supabase.from('servers').select('owner_id').eq('id', channel.server_id).maybeSingle();
   if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+
   await supabase.from('server_channels').delete().eq('id', channelId);
   res.json({ ok: true });
 });
@@ -771,6 +730,7 @@ app.post('/api/servers/:id/roles', requireAuth, async (req, res) => {
   const { name, color } = req.body;
   const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
   if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+
   const { data: role, error } = await supabase.from('server_roles')
     .insert({ server_id: serverId, name: name.trim(), color: color || '#99aab5' })
     .select().single();
@@ -783,6 +743,7 @@ app.post('/api/servers/:id/roles/assign', requireAuth, async (req, res) => {
   const { user_id, role_id } = req.body;
   const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
   if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
+
   await supabase.from('server_member_roles').upsert({ server_id: serverId, user_id, role_id });
   res.json({ ok: true });
 });
@@ -792,66 +753,86 @@ app.post('/api/servers/:id/roles/revoke', requireAuth, async (req, res) => {
   const { user_id, role_id } = req.body;
   const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
   if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'No permission' });
-  await supabase.from('server_member_roles').delete().eq('server_id', serverId).eq('user_id', user_id).eq('role_id', role_id);
+
+  await supabase.from('server_member_roles').delete()
+    .eq('server_id', serverId).eq('user_id', user_id).eq('role_id', role_id);
   res.json({ ok: true });
 });
 
 app.put('/api/channels/:id/permissions', requireAuth, async (req, res) => {
   const channelId = Number(req.params.id);
   const { role_id, can_send_messages } = req.body;
+  
   const { data: channel } = await supabase.from('server_channels').select('server_id').eq('id', channelId).maybeSingle();
   if (!channel) return res.status(404).json({ error: 'Canal nao encontrado' });
   const { data: server } = await supabase.from('servers').select('owner_id').eq('id', channel.server_id).maybeSingle();
   if (!server || server.owner_id !== req.session.userId) return res.status(403).json({ error: 'Sem permissao' });
-  await supabase.from('channel_role_permissions').upsert({ channel_id: channelId, role_id, can_send_messages }, { onConflict: 'channel_id, role_id' });
+
+  await supabase.from('channel_role_permissions').upsert({ 
+    channel_id: channelId, role_id, can_send_messages 
+  }, { onConflict: 'channel_id, role_id' });
   res.json({ ok: true });
 });
-
-// ========================================
-// MENSAGENS DE SERVIDOR
-// ========================================
 
 app.get('/api/servers/:id/channels/:channelId/messages', requireAuth, async (req, res) => {
   const { id: serverId, channelId } = req.params;
   const before = req.query.before ? Number(req.query.before) : null;
+  
   const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
   if (!member) return res.status(403).json({ error: 'Voce nao esta nesse servidor' });
+
   let query = supabase.from('server_messages')
     .select('*, deleted_at, reply_to, users:sender_id(id, serial_id, username, display_name, avatar)')
     .eq('server_id', serverId).eq('channel_id', channelId)
-    .order('id', { ascending: false }).limit(50);
+    .order('id', { ascending: false })
+    .limit(50);
+    
   if (before) query = query.lt('id', before);
+  
   const { data: messages } = await query;
   messages.reverse();
+  
   res.json({ messages, has_more: messages.length === 50 });
 });
 
 app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, messageLimiter, async (req, res) => {
   const { id: serverId, channelId } = req.params;
   const { content, reply_to } = req.body;
+  
+  // Validação de Input
   if (!content || typeof content !== 'string' || !content.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
   if (content.length > 4000) return res.status(400).json({ error: 'Mensagem muito longa' });
+  
+  // Autorização (Verifica se está no servidor)
   const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
   if (!member) return res.status(403).json({ error: 'Voce nao esta nesse servidor' });
+
+  // Verifica permissão de canal (se não está mutado)
   const { data: userRoles } = await supabase.from('server_member_roles').select('role_id').eq('server_id', serverId).eq('user_id', req.session.userId);
   const roleIds = (userRoles || []).map(r => r.role_id);
   const { data: overrides } = await supabase.from('channel_role_permissions')
     .select('can_send_messages').eq('channel_id', channelId).in('role_id', roleIds);
-  if (overrides.some(o => o.can_send_messages === false)) return res.status(403).json({ error: 'Voce nao tem permissao para falar neste canal' });
+    
+  if (overrides.some(o => o.can_send_messages === false)) {
+    return res.status(403).json({ error: 'Voce nao tem permissao para falar neste canal' });
+  }
 
+  // Inserção segura
   const { data: message, error } = await supabase.from('server_messages')
-    .insert({
-      server_id: Number(serverId),
-      channel_id: Number(channelId),
-      sender_id: req.session.userId,
+    .insert({ 
+      server_id: Number(serverId), 
+      channel_id: Number(channelId), 
+      sender_id: req.session.userId, 
       content: content.trim(),
       reply_to: reply_to ? Number(reply_to) : null
     })
     .select('*, users:sender_id(id, serial_id, username, display_name, avatar)').single();
+  
   if (error) {
     console.error('Erro ao salvar msg servidor:', error);
     return res.status(500).json({ error: 'Erro interno' });
   }
+  
   io.to('server:' + serverId).emit('new_server_message', message);
   res.json({ message });
 });
@@ -860,34 +841,40 @@ app.delete('/api/servers/:serverId/messages/:msgId', requireAuth, async (req, re
   const { serverId, msgId } = req.params;
   const { data: msg } = await supabase.from('server_messages').select('*').eq('id', msgId).maybeSingle();
   if (!msg) return res.status(404).json({ error: 'Not found' });
+
   const isOwner = msg.sender_id === req.session.userId;
   let canManage = false;
+  
   const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
   if (server.owner_id === req.session.userId) canManage = true;
   else {
     const { data: roles } = await supabase.from('server_member_roles').select('role_id').eq('server_id', serverId).eq('user_id', req.session.userId);
-    const rIds = (roles || []).map(r => r.role_id);
-    if (rIds.length > 0) {
-      const { data: roleData } = await supabase.from('server_roles').select('manage_messages').in('id', rIds);
+    const roleIds = (roles || []).map(r => r.role_id);
+    if (roleIds.length > 0) {
+      const { data: roleData } = await supabase.from('server_roles').select('manage_messages').in('id', roleIds);
       canManage = roleData.some(r => r.manage_messages);
     }
   }
+
   if (!isOwner && !canManage) return res.status(403).json({ error: 'No permission' });
-  await supabase.from('server_messages').update({ content: 'Mensagem apagada', deleted_at: new Date().toISOString() }).eq('id', msgId);
+
+  const { error } = await supabase.from('server_messages').update({ content: 'Mensagem apagada', deleted_at: new Date().toISOString() }).eq('id', msgId);
+  if (error) {
+    console.error('Erro do Supabase ao deletar msg de servidor:', error);
+    return res.status(500).json({ error: 'O banco de dados recusou a exclusão.' });
+  }
+
   io.to('server:' + serverId).emit('server_message_deleted', { messageId: Number(msgId) });
   res.json({ ok: true });
 });
 
-// ========================================
-// GIFs (Giphy API)
-// ========================================
-
+// ---------- GIFs (Giphy API) ----------
 app.get('/api/gifs/search', requireAuth, async (req, res) => {
   const { q } = req.query;
   try {
     const response = await fetch(`https://api.giphy.com/v1/gifs/search?q=${encodeURIComponent(q || 'hello')}&api_key=${process.env.GIPHY_API_KEY}&limit=24&rating=pg`);
     if (!response.ok) {
-      console.error('Giphy erro:', response.status, await response.text());
+      console.error('Giphy respondeu com erro:', response.status, await response.text());
       return res.status(502).json({ error: 'Giphy indisponivel' });
     }
     const data = await response.json();
@@ -907,7 +894,10 @@ app.get('/api/gifs/favorites', requireAuth, async (req, res) => {
 app.post('/api/gifs/favorites', requireAuth, async (req, res) => {
   const { gif_url } = req.body;
   const { error } = await supabase.from('favorite_gifs').upsert({ user_id: req.session.userId, gif_url }, { onConflict: 'user_id,gif_url' });
-  if (error) return res.status(500).json({ error: 'Erro ao favoritar GIF' });
+  if (error) {
+    console.error('Erro ao favoritar GIF:', error);
+    return res.status(500).json({ error: 'Erro ao favoritar GIF' });
+  }
   res.json({ ok: true });
 });
 
@@ -917,10 +907,30 @@ app.delete('/api/gifs/favorites', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ========================================
-// SOCKET.IO
-// ========================================
+// ---------- Reações ----------
+app.post('/api/messages/:id/reactions', requireAuth, async (req, res) => {
+  const msgId = Number(req.params.id);
+  const { emoji } = req.body;
+  const { data: msg } = await supabase.from('messages').select('sender_id, receiver_id').eq('id', msgId).maybeSingle();
+  if (!msg) return res.status(404).json({ error: 'Mensagem não encontrada' });
 
+  const { data: existing } = await supabase.from('message_reactions')
+    .select('id').eq('message_id', msgId).eq('user_id', req.session.userId).eq('emoji', emoji).maybeSingle();
+
+  if (existing) {
+    await supabase.from('message_reactions').delete().eq('id', existing.id);
+    io.to('user:' + msg.sender_id).emit('reaction_removed', { messageId: msgId, emoji, userId: req.session.userId });
+    io.to('user:' + msg.receiver_id).emit('reaction_removed', { messageId: msgId, emoji, userId: req.session.userId });
+    res.json({ ok: true, action: 'removed' });
+  } else {
+    await supabase.from('message_reactions').insert({ message_id: msgId, user_id: req.session.userId, emoji });
+    io.to('user:' + msg.sender_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId });
+    io.to('user:' + msg.receiver_id).emit('reaction_added', { messageId: msgId, emoji, userId: req.session.userId });
+    res.json({ ok: true, action: 'added' });
+  }
+});
+
+// ---------- Socket.io ----------
 const onlineUsers = new Map();
 
 async function broadcastPresence(userId) {
@@ -938,10 +948,10 @@ io.on('connection', (socket) => {
   broadcastPresence(userId);
 
   socket.on('join_server', async (serverId) => {
-    const parsedId = Number(serverId);
+    const parsedServerId = Number(serverId);
     const { data: member } = await supabase.from('server_members').select('id')
-      .eq('server_id', parsedId).eq('user_id', userId).maybeSingle();
-    if (member) socket.join('server:' + parsedId);
+      .eq('server_id', parsedServerId).eq('user_id', userId).maybeSingle();
+    if (member) socket.join('server:' + parsedServerId);
   });
 
   socket.on('disconnect', () => {
@@ -950,9 +960,5 @@ io.on('connection', (socket) => {
     else onlineUsers.set(userId, count);
   });
 });
-
-// ========================================
-// START
-// ========================================
 
 server.listen(PORT, () => console.log(`Synto rodando em http://localhost:${PORT}`));
