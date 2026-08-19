@@ -972,18 +972,72 @@ async function loadFriends() {
 }
 
 function setupUsersView() {
-  document.getElementById('user-search-btn').addEventListener('click', async () => {
-    const input = document.getElementById('user-search-input');
-    const resultEl = document.getElementById('user-search-result');
+  const input = document.getElementById('user-search-input');
+  const btn = document.getElementById('user-search-btn');
+  const resultEl = document.getElementById('user-search-result');
+  if (!input || !btn || !resultEl) return;
+
+  async function doSearch() {
+    // Normaliza: aceita "#000000001", "000000001" e remove espaços
+    const serial = input.value.trim().replace(/^#+/, '').replace(/\s+/g, '');
+    if (!serial) {
+      resultEl.innerHTML = '<p class="form-error">Enter a Serial ID to search.</p>';
+      input.focus();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Searching...';
+    resultEl.innerHTML = '<p class="muted small">Searching...</p>';
+
     try {
-      const { user } = await api('/users/search?serial_id=' + encodeURIComponent(input.value.trim()));
-      resultEl.innerHTML = `<div class="list-item"><div class="clickable"><img class="avatar" src="${avatarOrDefault(user.avatar)}" /><div class="info"><div class="name">${escapeHtml(user.display_name)}</div><div class="muted small">${user.serial_id}</div></div></div><div class="actions"><button id="add-from-search-btn">➕</button></div></div>`;
-      resultEl.querySelector('.clickable').addEventListener('click', () => openProfileModal(user.id, 'stranger'));
-      document.getElementById('add-from-search-btn').addEventListener('click', async () => {
-        await api('/friends/request', { method: 'POST', body: JSON.stringify({ serial_id: user.serial_id }) });
-        resultEl.insertAdjacentHTML('beforeend', '<p class="form-success">Request sent!</p>');
-      });
-    } catch (err) { resultEl.innerHTML = `<p class="form-error">${escapeHtml(err.message)}</p>`; }
+      const { user } = await api('/users/search?serial_id=' + encodeURIComponent(serial));
+
+      if (!user) {
+        resultEl.innerHTML = '<p class="form-error">User not found.</p>';
+        return;
+      }
+
+      if (currentUser && user.id === currentUser.id) {
+        resultEl.innerHTML = '<p class="muted small">This is you!</p>';
+        return;
+      }
+
+      const isFriend = cachedFriends.some(f => f.id === user.id);
+      const requestSent = cachedOutgoing.some(r => r.id === user.id);
+      const relation = isFriend ? 'friend' : 'stranger';
+      const btnLabel = isFriend ? '✔ Friends' : requestSent ? '⏳ Sent' : '➕';
+
+      resultEl.innerHTML = `<div class="list-item"><div class="clickable"><img class="avatar" src="${avatarOrDefault(user.avatar)}" /><div class="info"><div class="name">${escapeHtml(user.display_name)}</div><div class="muted small">${escapeHtml(user.serial_id)}</div></div></div><div class="actions"><button id="add-from-search-btn">${btnLabel}</button></div></div>`;
+      resultEl.querySelector('.clickable').addEventListener('click', () => openProfileModal(user.id, relation));
+
+      const addBtn = document.getElementById('add-from-search-btn');
+      if (isFriend || requestSent) {
+        addBtn.disabled = true;
+      } else {
+        addBtn.addEventListener('click', async () => {
+          addBtn.disabled = true;
+          try {
+            await api('/friends/request', { method: 'POST', body: JSON.stringify({ serial_id: user.serial_id }) });
+            addBtn.textContent = '⏳ Sent';
+            loadFriendRequests();
+          } catch (err) {
+            addBtn.disabled = false;
+            showToast(err.message, 'error');
+          }
+        });
+      }
+    } catch (err) {
+      resultEl.innerHTML = `<p class="form-error">${escapeHtml(err.message)}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Search';
+    }
+  }
+
+  btn.addEventListener('click', doSearch);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
   });
 }
 
@@ -1871,7 +1925,7 @@ function appendServerMessage(message, prepend = false) {
     contentEl.textContent = 'Mensagem apagada';
     div.dataset.content = '';
   } else {
-    contentEl.content.innerHTML = parseEmojis(message.content);
+    contentEl.innerHTML = parseEmojis(message.content);
     div.dataset.content = message.content;
   }
   body.appendChild(contentEl);
