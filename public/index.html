@@ -459,11 +459,11 @@
 
               <div id="file-upload-bar" class="reply-context hidden">
                 <div>
-                  <small>Enviando arquivo...</small>
+                  <small>Uploading File...</small>
                   <div id="file-upload-name" class="muted small"></div>
                 </div>
               </div>
-              
+
               <form id="chat-form" class="chat-input-row">
                 <button type="button" id="open-file-btn" class="btn-secondary" title="Enviar arquivo">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -568,6 +568,16 @@
   </div>
 
   <!-- Twemoji: o mesmo estilo de emoji do Discord -->
+
+  <div id="image-lightbox" class="lightbox-backdrop hidden">
+    <div class="lightbox-toolbar">
+      <button id="lightbox-copy" class="lightbox-btn" title="Copy link" type="button">🔗</button>
+      <button id="lightbox-download" class="lightbox-btn" title="Download" type="button">⬇</button>
+      <button id="lightbox-close" class="lightbox-btn" title="Close" type="button">✖</button>
+    </div>
+    <img id="lightbox-img" class="lightbox-img" src="" alt="" />
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>

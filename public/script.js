@@ -882,6 +882,8 @@ async function init() {
   setupPreferences();
   setupChatForm();
   setupFileUpload();
+  setupFileDragDrop();
+  setupImageLightbox();
 
   // Fecha pickers/autocomplete ao clicar fora
   document.addEventListener('click', (e) => {
@@ -1401,11 +1403,11 @@ function appendMessage(message, prepend = false) {
     wrapper.dataset.content = '';
     } else if (message.content.startsWith('img:')) {
         const url = message.content.replace('img:', '');
-        bubble.innerHTML = `<img src="${url}" class="msg-gif" />`;
+        bubble.innerHTML = `<img src="${url}" class="msg-gif lightbox-trigger" />`;
         wrapper.dataset.content = 'GIF';
     } else if (message.content.startsWith('file:')) {
         bubble.innerHTML = renderFileMessage(message.content);
-        wrapper.dataset.content = 'Arquivo';
+        wrapper.dataset.content = 'File';
     } else {
         bubble.innerHTML = parseEmojis(message.content);
         wrapper.dataset.content = message.content;
@@ -1702,24 +1704,197 @@ function formatFileSize(bytes) {
   return n.toFixed(n < 10 && i > 0 ? 1 : 0) + ' ' + units[i];
 }
 
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
+let isUploadingFile = false;
+
+function formatFileSize(bytes) {
+  if (!bytes) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return n.toFixed(n < 10 && i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
 function renderFileMessage(raw) {
   let meta;
-  try { meta = JSON.parse(raw.replace('file:', '')); } catch { return 'Arquivo indisponivel'; }
+  try { meta = JSON.parse(raw.replace('file:', '')); } catch { return 'File unavailable'; }
   const type = meta.type || '';
+  const safeUrl = escapeHtml(meta.url || '');
+  const safeName = escapeHtml(meta.name || 'file');
+
   if (type.startsWith('image/')) {
-    return `<a href="${meta.url}" target="_blank" rel="noopener"><img src="${meta.url}" class="msg-gif" /></a>`;
+    return `<img src="${safeUrl}" class="msg-gif lightbox-trigger" />`;
   }
   if (type.startsWith('video/')) {
-    return `<video src="${meta.url}" class="msg-video" controls></video>`;
+    return `<video src="${safeUrl}" class="msg-video" controls></video>`;
   }
+
   const ext = (meta.name || '').split('.').pop().toUpperCase().slice(0, 4);
-  return `<a href="${meta.url}" target="_blank" rel="noopener" class="msg-file-card">
+  return `<div class="msg-file-card" data-file-url="${safeUrl}" data-file-name="${safeName}">
     <span class="msg-file-icon">${ext || '?'}</span>
     <div class="msg-file-info">
-      <div class="msg-file-name">${escapeHtml(meta.name || 'arquivo')}</div>
+      <div class="msg-file-name">${safeName}</div>
       <div class="msg-file-size">${formatFileSize(meta.size)}</div>
     </div>
-  </a>`;
+    <span class="msg-file-download">⬇</span>
+  </div>`;
+}
+
+async function downloadFile(url, name) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = name || 'file';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    showToast('Failed to download file', 'error');
+  }
+}
+
+async function uploadAndSendFile(file) {
+  if (!activeFriend || isUploadingFile) return;
+  if (file.size > MAX_FILE_SIZE) {
+    showToast('File is too large (max 25MB)', 'error');
+    return;
+  }
+
+  isUploadingFile = true;
+  const btn = document.getElementById('open-file-btn');
+  const bar = document.getElementById('file-upload-bar');
+  const nameEl = document.getElementById('file-upload-name');
+  if (btn) btn.disabled = true;
+  bar.classList.remove('hidden');
+  nameEl.textContent = file.name || 'file';
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const meta = await api('/upload/message-file', { method: 'POST', body: formData });
+    const content = 'file:' + JSON.stringify({ url: meta.url, name: meta.name, type: meta.type, size: meta.size });
+    const { message } = await api('/messages', { method: 'POST', body: JSON.stringify({ receiver_id: activeFriend.id, content, reply_to: replyDM?.id }) });
+    appendMessage(message);
+    playSound('send');
+    cancelReplyDM();
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    isUploadingFile = false;
+    if (btn) btn.disabled = false;
+    bar.classList.add('hidden');
+  }
+}
+
+function setupFileUpload() {
+  const btn = document.getElementById('open-file-btn');
+  const input = document.getElementById('file-input-dm');
+  btn.addEventListener('click', () => input.click());
+
+  input.addEventListener('change', async () => {
+    const files = Array.from(input.files);
+    for (const file of files) {
+      await uploadAndSendFile(file);
+    }
+    input.value = '';
+  });
+
+  document.getElementById('chat-input').addEventListener('paste', async (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const fileItem = items.find(it => it.kind === 'file');
+    if (!fileItem) return;
+    e.preventDefault();
+    const file = fileItem.getAsFile();
+    if (file) await uploadAndSendFile(file);
+  });
+
+  document.addEventListener('click', (e) => {
+    const card = e.target.closest('.msg-file-card');
+    if (card) downloadFile(card.dataset.fileUrl, card.dataset.fileName);
+  });
+}
+
+function setupFileDragDrop() {
+  const dropZone = document.getElementById('chat-active');
+  if (!dropZone) return;
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      if (activeFriend) dropZone.classList.add('file-drop-active');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(evt => {
+    dropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('file-drop-active');
+    });
+  });
+
+  dropZone.addEventListener('drop', async (e) => {
+    if (!activeFriend) return;
+    const files = Array.from(e.dataTransfer?.files || []);
+    for (const file of files) {
+      await uploadAndSendFile(file);
+    }
+  });
+}
+
+function setupImageLightbox() {
+  const backdrop = document.getElementById('image-lightbox');
+  const img = document.getElementById('lightbox-img');
+  let zoomed = false;
+
+  function openLightbox(src) {
+    img.src = src;
+    zoomed = false;
+    img.classList.remove('zoomed');
+    backdrop.classList.remove('hidden');
+  }
+
+  function closeLightbox() {
+    backdrop.classList.add('hidden');
+    img.src = '';
+  }
+
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest('.lightbox-trigger');
+    if (target) {
+      e.preventDefault();
+      openLightbox(target.src);
+    }
+  });
+
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closeLightbox();
+  });
+
+  img.addEventListener('click', (e) => {
+    e.stopPropagation();
+    zoomed = !zoomed;
+    img.classList.toggle('zoomed', zoomed);
+  });
+
+  document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+  document.getElementById('lightbox-download').addEventListener('click', () => downloadFile(img.src, 'image'));
+  document.getElementById('lightbox-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(img.src);
+      showToast('Link copied', 'success');
+    } catch {
+      showToast('Failed to copy link', 'error');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !backdrop.classList.contains('hidden')) closeLightbox();
+  });
 }
 
 async function uploadAndSendFile(file) {
