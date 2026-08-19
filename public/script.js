@@ -111,6 +111,59 @@ function showNotification(title, body, avatarUrl) {
     setTimeout(() => notif.remove(), 400);
   }, 4000);
 }
+
+// ========== EMOJI SHORTCODES (estilo Discord) ==========
+const EMOJI_MAP = {
+  smile: '😄', grinning: '😀', laugh: '😂', joy: '😂', rofl: '🤣',
+  wink: '😉', blush: '😊', heart_eyes: '😍', kissing_heart: '😘',
+  thinking: '🤔', neutral: '😐', expressionless: '😑', confused: '😕',
+  worried: '😟', cry: '😢', sob: '😭', angry: '😠', rage: '😡',
+  thumbsup: '👍', thumbsdown: '👎', ok_hand: '👌', clap: '👏',
+  wave: '👋', pray: '🙏', muscle: '💪', fire: '🔥', 100: '💯',
+  heart: '❤️', hearts: '💕', broken_heart: '💔', sparkles: '✨',
+  star: '⭐', star2: '🌟', zap: '⚡', boom: '💥', tada: '🎉',
+  party: '🥳', gift: '🎁', cake: '🎂', coffee: '☕', pizza: '🍕',
+  beer: '🍺', wine: '🍷', rocket: '🚀', eyes: '👀', skull: '💀',
+  ghost: '👻', alien: '👽', robot: '🤖', cat: '🐱', dog: '🐶',
+  fox: '🦊', lion: '🦁', unicorn: '🦄', dragon: '🐉',
+  sun: '☀️', moon: '🌙', cloud: '☁️', rain: '🌧️', snow: '❄️',
+  check: '✅', x: '❌', warning: '⚠️', question: '❓',
+  exclamation: '❗', bangbang: '‼️', interrobang: '⁉️',
+  pencil: '✏️', book: '📖', link: '🔗', lock: '🔒', unlock: '🔓',
+  key: '🔑', money: '💰', gem: '💎', trophy: '🏆', medal: '🏅',
+  crown: '👑', sunglasses: '😎', nerd: '🤓', cool: '😎',
+  sleepy: '😴', yawning: '🥱', sick: '🤒', mask: '😷',
+  poop: '💩', peach: '🍑', eggplant: '🍆', banana: '🍌',
+  apple: '🍎', grape: '🍇', cherry: '🍒', strawberry: '🍓',
+  // aliases comuns
+  ':D': '😄', ':)': '🙂', ':(': '🙁', ';)': '😉',
+  '<3': '❤️', '</3': '💔', ':P': '😛', ':p': '😛',
+  'xD': '😆', 'XD': '😆'
+};
+
+function parseEmojis(text) {
+  if (!text) return '';
+  // shortcodes :name:
+  let result = text.replace(/:([a-z0-9_+-]+):/gi, (match, name) => {
+    const key = name.toLowerCase();
+    return EMOJI_MAP[key] || match;
+  });
+  // aliases simples
+  result = result.replace(/:D/g, '😄').replace(/:\)/g, '🙂').replace(/:\(/g, '🙁')
+                 .replace(/;\)/g, '😉').replace(/<3/g, '❤️').replace(/<\/3/g, '💔')
+                 .replace(/:P/gi, '😛').replace(/xD/gi, '😆');
+  return result;
+}
+
+function renderWithEmojis(el) {
+  if (!el || typeof twemoji === 'undefined') return;
+  twemoji.parse(el, {
+    folder: 'svg',
+    ext: '.svg',
+    base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/'
+  });
+}
+
 const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#5865f2"/><text x="50%" y="55%" font-size="32" fill="white" text-anchor="middle" font-family="sans-serif">?</text></svg>`);
 
 async function api(path, options = {}) {
@@ -325,6 +378,8 @@ function enterApp() {
   setupStatus();
   playSound('login');
   switchView('home');
+  setupHomeStatus();
+  updateHomeOnlineFriends();
 }
 
 function connectSocket() {
@@ -356,6 +411,7 @@ function connectSocket() {
   socket.on('presence', ({ userId, online }) => {
     if (online) onlineFriendIds.add(userId); else onlineFriendIds.delete(userId);
     updateOnlineIndicators();
+    updateHomeOnlineFriends();   // <-- adicionar
   });
   socket.on('new_server_message', (message) => {
     if (activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id) {
@@ -505,7 +561,6 @@ function renderProfile() {
   document.getElementById('profile-serial').textContent = currentUser.serial_id;
   document.getElementById('profile-bio').textContent = currentUser.bio || 'No bio provided.';
   
-  // Preenche o banner
   const bannerEl = document.getElementById('profile-banner-el');
   if (currentUser.banner) {
     bannerEl.style.backgroundImage = `url('${currentUser.banner}')`;
@@ -513,9 +568,63 @@ function renderProfile() {
     bannerEl.style.backgroundImage = 'linear-gradient(135deg, var(--accent), var(--accent-hover))';
   }
 
-  // Atualiza o nome no header da Home
   const homeUserEl = document.getElementById('home-username');
   if (homeUserEl) homeUserEl.textContent = currentUser.display_name;
+
+  updateHomeOnlineFriends();
+}
+
+function updateHomeOnlineFriends() {
+  const container = document.getElementById('home-online-friends');
+  if (!container) return;
+
+  const online = cachedFriends.filter(f => onlineFriendIds.has(f.id));
+  container.innerHTML = '';
+
+  if (online.length === 0) {
+    container.innerHTML = '<p class="muted small">No friends online</p>';
+    return;
+  }
+
+  online.slice(0, 8).forEach(friend => {
+    const item = document.createElement('div');
+    item.className = 'home-friend-item';
+    item.innerHTML = `
+      <img class="avatar" src="${avatarOrDefault(friend.avatar)}" />
+      <div class="name theme-name">${escapeHtml(friend.display_name)}</div>
+    `;
+    item.onclick = () => { switchView('chat'); openChat(friend); };
+    container.appendChild(item);
+  });
+}
+
+function setupHomeStatus() {
+  const grid = document.getElementById('home-status-grid');
+  if (!grid) return;
+  const buttons = grid.querySelectorAll('.status-btn');
+
+  function updateActive() {
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.status === currentUser.status));
+  }
+  updateActive();
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const status = btn.dataset.status;
+      try {
+        await api('/status', { method: 'PUT', body: JSON.stringify({ status }) });
+        currentUser.status = status;
+        updateActive();
+        // também atualiza o grid das settings se existir
+        const settingsGrid = document.getElementById('status-grid');
+        if (settingsGrid) {
+          settingsGrid.querySelectorAll('.status-btn').forEach(b => 
+            b.classList.toggle('active', b.dataset.status === status)
+          );
+        }
+      } catch (err) { showToast(err.message, 'error'); }
+    });
+  });
 }
 
 // ---------- Friends & Chat ----------
@@ -965,10 +1074,10 @@ function appendMessage(message, prepend = false) {
     bubble.innerHTML = `<img src="${url}" style="max-width:100%; border-radius:8px; display:block;" />`;
     wrapper.dataset.content = "GIF";
   } else {
-    bubble.textContent = message.content;
+    bubble.textContent = parseEmojis(message.content);
     wrapper.dataset.content = message.content;
+    renderWithEmojis(bubble);
   }
-  wrapper.appendChild(bubble);
 
   if (!message.deleted_at) {
     const actions = document.createElement('div');
@@ -1517,8 +1626,9 @@ function appendServerMessage(message, prepend = false) {
     contentEl.textContent = 'Mensagem apagada';
     div.dataset.content = '';
   } else {
-    contentEl.textContent = message.content;
+    contentEl.textContent = parseEmojis(message.content);
     div.dataset.content = message.content;
+    renderWithEmojis(contentEl);
   }
   body.appendChild(contentEl);
 
