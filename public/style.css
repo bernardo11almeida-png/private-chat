@@ -65,6 +65,18 @@
   --brand-to: #f0b232;
 }
 
+[data-theme="sunset"] {
+  --bg: #1a1420;
+  --bg-elevated: #241c2e;
+  --bg-elevated-2: #2e2438;
+  --border: #402f4c;
+  --text: #f7ecf5;
+  --text-muted: #b79dc4;
+  --shadow-color: rgba(0,0,0,0.45);
+  --brand-glow: rgba(255, 126, 95, 0.35);
+  --brand-to: #ff7e5f;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -405,6 +417,7 @@ button:hover { background: var(--accent-hover); }
 .swatch-midnight { background: #0b0e1a; }
 .swatch-forest { background: #141d18; }
 .swatch-coffee { background: #241608; }
+.swatch-sunset { background: #1a1420; }
 
 .accent-row {
   display: flex;
@@ -1232,44 +1245,64 @@ textarea:focus {
 .reactions-container {
   display: flex;
   gap: 4px;
-  margin-top: 4px;
   flex-wrap: wrap;
+  align-self: flex-start;
+  position: relative;
+  z-index: 3;
 }
+.reactions-container:not(:empty) {
+  margin-top: 3px;
+  margin-bottom: 6px;
+  padding: 0 2px;
+}
+.reactions-container:empty { display: none; }
 
 .reaction-badge {
   background: var(--bg-elevated-2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 2px 8px;
-  font-size: 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 1px 6px;
+  font-size: 11px;
   display: flex;
   align-items: center;
   gap: 4px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all .15s ease;
 }
+.reaction-badge:hover { border-color: var(--accent); background: var(--bg-elevated); }
+.reaction-badge.mine {
+  background: rgba(88, 101, 242, .14);
+  border-color: var(--accent);
+}
+.reaction-badge.mine span { color: var(--accent); font-weight: 700; }
+.reaction-badge img.emoji { width: 13px; height: 13px; margin: 0; }
 
-.reaction-badge:hover { border-color: var(--accent); }
-.reaction-badge.mine { background: rgba(88, 101, 242, 0.2); border-color: var(--accent); color: var(--accent); }
-
-.add-reaction-btn {
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 24px;
-  height: 24px;
-  background: var(--bg-elevated-2);
+.emoji-quick-picker {
+  position: fixed;
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 50%;
+  border-radius: 10px;
+  padding: 6px;
   display: none;
+  grid-template-columns: repeat(6, 28px);
+  grid-auto-rows: 28px;
+  gap: 2px;
+  z-index: 500;
+  box-shadow: 0 10px 30px var(--shadow-color);
+  width: max-content;
+}
+.emoji-quick-picker.show { display: grid; }
+.emoji-quick-picker span {
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  font-size: 12px;
-  z-index: 5;
 }
-
-.message-wrapper:hover .add-reaction-btn { display: flex; }
+.emoji-quick-picker span:hover { background: var(--bg-elevated-2); }
+.emoji-quick-picker img.emoji { width: 20px; height: 20px; }
 
 .emoji-quick-picker {
   position: absolute;
@@ -1909,34 +1942,6 @@ img.emoji {
 /* Botão de reação agora mora junto de reply/delete */
 .message-actions button img.emoji { pointer-events: none; }
 
-/* ===== Picker de reação (Twemoji) ===== */
-.emoji-quick-picker {
-  position: absolute;
-  top: 20px;
-  right: 0;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px;
-  display: none;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 2px;
-  z-index: 30;
-  box-shadow: 0 10px 30px var(--shadow-color);
-}
-.emoji-quick-picker.show { display: grid; }
-.emoji-quick-picker span {
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.emoji-quick-picker span:hover { background: var(--bg-elevated-2); }
-.emoji-quick-picker img.emoji { width: 22px; height: 22px; }
-.server-message .emoji-quick-picker { top: 34px; right: 4px; }
-
 /* GIF nas mensagens */
 .msg-gif { max-width: 100%; border-radius: 8px; display: block; }
 
@@ -1983,3 +1988,11 @@ img.emoji {
   .settings-nav-btn { width: auto; white-space: nowrap; margin-bottom: 0; }
   .settings-content { padding: 20px; }
 }
+
+body.reduced-motion, body.reduced-motion * {
+  animation: none !important;
+  transition: none !important;
+}
+body.compact-mode .message-wrapper { max-width: 78%; }
+body.compact-mode .message-bubble { padding: 5px 10px; font-size: 13px; }
+body.compact-mode .reactions-container:not(:empty) { margin-top: 1px; margin-bottom: 3px; }

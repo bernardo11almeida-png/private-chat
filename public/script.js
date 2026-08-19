@@ -96,6 +96,19 @@ function parseEmojis(text) {
   return toTwemoji(safe);
 }
 
+function positionEmojiPicker(picker, anchorBtn) {
+  const rect = anchorBtn.getBoundingClientRect();
+  const pickerWidth = 6 * 28 + 5 * 2 + 12;
+  const pickerHeight = 3 * 28 + 2 * 2 + 12;
+  let left = rect.right - pickerWidth;
+  if (left < 8) left = 8;
+  if (left + pickerWidth > window.innerWidth - 8) left = window.innerWidth - pickerWidth - 8;
+  let top = rect.bottom + 6;
+  if (top + pickerHeight > window.innerHeight - 8) top = rect.top - pickerHeight - 6;
+  picker.style.left = left + 'px';
+  picker.style.top = top + 'px';
+}
+
 function closeAllEmojiPickers(exceptWrapper) {
   document.querySelectorAll('.emoji-quick-picker.show').forEach(p => {
     if (!exceptWrapper || !exceptWrapper.contains(p)) p.classList.remove('show');
@@ -723,6 +736,24 @@ function fillAccountCard() {
   }
 }
 
+function setupPreferences() {
+  const prefs = [
+    { id: 'pref-reduced-motion', key: 'pc_reduced_motion', className: 'reduced-motion' },
+    { id: 'pref-compact-mode', key: 'pc_compact_mode', className: 'compact-mode' }
+  ];
+  prefs.forEach(({ id, key, className }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const enabled = localStorage.getItem(key) === 'on';
+    el.checked = enabled;
+    document.body.classList.toggle(className, enabled);
+    el.addEventListener('change', () => {
+      localStorage.setItem(key, el.checked ? 'on' : 'off');
+      document.body.classList.toggle(className, el.checked);
+    });
+  });
+}
+
 function setupNotificationPrefs() {
   const toggles = [
     { id: 'pref-msg-sound', key: 'pc_sound_messages' },
@@ -847,6 +878,8 @@ async function init() {
   setupChatHeaderProfile();    // ✨ novo
   setupEmojiAutocomplete('chat-input');        // ✨ novo
   setupEmojiAutocomplete('server-chat-input'); // ✨ novo
+  setupNotificationPrefs();
+  setupPreferences();
 
   // Fecha pickers/autocomplete ao clicar fora
   document.addEventListener('click', (e) => {
@@ -1390,10 +1423,12 @@ function buildMessageActions(message, type, wrapper) {
   reactBtn.onclick = (e) => {
     e.stopPropagation();
     const picker = wrapper.querySelector('.emoji-quick-picker');
-    if (picker) {
-      const isOpen = picker.classList.contains('show');
-      closeAllEmojiPickers();
-      if (!isOpen) picker.classList.add('show');
+    if (!picker) return;
+    const isOpen = picker.classList.contains('show');
+    closeAllEmojiPickers();
+    if (!isOpen) {
+      positionEmojiPicker(picker, reactBtn);
+      picker.classList.add('show');
     }
   };
   actions.appendChild(reactBtn);

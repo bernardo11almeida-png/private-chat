@@ -359,6 +359,7 @@
                 <button type="button" class="theme-swatch" data-theme="midnight"><span class="swatch-preview swatch-midnight"></span> Midnight</button>
                 <button type="button" class="theme-swatch" data-theme="forest"><span class="swatch-preview swatch-forest"></span> Forest</button>
                 <button type="button" class="theme-swatch" data-theme="coffee"><span class="swatch-preview swatch-coffee"></span> Coffee</button>
+                <button type="button" class="theme-swatch" data-theme="sunset"><span class="swatch-preview swatch-sunset"></span> Sunset</button>
               </div>
 
               <label class="field-label">Accent Color</label>
@@ -371,7 +372,7 @@
             <!-- NOTIFICATIONS -->
             <div id="settings-section-notifications" class="settings-section hidden">
               <h2 class="settings-title">Notifications</h2>
-              <p class="settings-desc">Control sounds and popup notifications.</p>
+              <p class="settings-desc">Control sounds and popup notifications.</p>            
 
               <div class="pref-row">
                 <div class="pref-text">
@@ -379,7 +380,7 @@
                   <p class="muted small">Play a sound when sending and receiving messages.</p>
                 </div>
                 <label class="toggle"><input type="checkbox" id="pref-msg-sound" checked /><span class="toggle-slider"></span></label>
-              </div>
+              </div>            
 
               <div class="pref-row">
                 <div class="pref-text">
@@ -387,7 +388,7 @@
                   <p class="muted small">Play the welcome sound when you log in.</p>
                 </div>
                 <label class="toggle"><input type="checkbox" id="pref-login-sound" checked /><span class="toggle-slider"></span></label>
-              </div>
+              </div>            
 
               <div class="pref-row">
                 <div class="pref-text">
@@ -395,6 +396,25 @@
                   <p class="muted small">Show a popup when you receive a new message.</p>
                 </div>
                 <label class="toggle"><input type="checkbox" id="pref-notify-popup" checked /><span class="toggle-slider"></span></label>
+              </div>            
+
+              <!-- ⬇️ COLE AQUI O NOVO BLOCO ⬇️ -->
+              <h3 class="settings-subtitle">Preferences</h3>            
+
+              <div class="pref-row">
+                <div class="pref-text">
+                  <strong>Reduced Motion</strong>
+                  <p class="muted small">Disables interface animations.</p>
+                </div>
+                <label class="toggle"><input type="checkbox" id="pref-reduced-motion" /><span class="toggle-slider"></span></label>
+              </div>            
+
+              <div class="pref-row">
+                <div class="pref-text">
+                  <strong>Compact Mode</strong>
+                  <p class="muted small">Reduces spacing between messages.</p>
+                </div>
+                <label class="toggle"><input type="checkbox" id="pref-compact-mode" /><span class="toggle-slider"></span></label>
               </div>
             </div>
           </div>
