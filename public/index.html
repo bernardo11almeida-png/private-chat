@@ -16,6 +16,120 @@
 </head>
 <body>
 
+    <div id="landing-screen" class="screen">
+      <nav class="landing-nav">
+        <div class="landing-nav-inner">
+          <div class="landing-brand">
+            <span class="landing-logo">S</span>
+            <span class="landing-brand-name">Synto</span>
+          </div>
+          <div class="landing-nav-links">
+            <a href="#landing-hero" class="landing-link active" data-nav="hero">Discover</a>
+            <a href="#landing-features" class="landing-link" data-nav="features">Features</a>
+            <a href="#landing-about" class="landing-link" data-nav="about">About</a>
+          </div>
+        </div>
+      </nav>
+    
+      <div class="landing-scroll">
+        <main class="landing-main">
+        
+          <section id="landing-hero" class="landing-hero-section">
+            <div class="landing-card">
+              <section class="landing-hero">
+                <h1 class="landing-title">Find your community.</h1>
+                <p class="landing-subtitle">
+                  Synto is a private chat for friends and communities<br>
+                  that works the way you always wished it would.
+                </p>
+                <div class="landing-actions">
+                  <button id="open-webapp-btn" class="landing-btn primary">Open Web App</button>
+                </div>
+              </section>
+            </div>
+          </section>
+        
+          <section class="landing-preview-section">
+            <div class="landing-preview-card">
+              <div class="landing-mockup">
+                <div class="mockup-titlebar">
+                  <span class="mockup-dot red"></span>
+                  <span class="mockup-dot yellow"></span>
+                  <span class="mockup-dot green"></span>
+                  <span class="mockup-title">Synto</span>
+                </div>
+                <div class="mockup-body">
+                  <div class="mockup-sidebar">
+                    <div class="mockup-nav-item active"></div>
+                    <div class="mockup-nav-item"></div>
+                    <div class="mockup-nav-item"></div>
+                    <div class="mockup-nav-item"></div>
+                  </div>
+                  <div class="mockup-content">
+                    <div class="mockup-chat-header">
+                      <div class="mockup-avatar" style="background:linear-gradient(135deg,#ed4245,#f0b232);">A</div>
+                      <div><div class="mockup-name">Alice</div><div class="mockup-status">Online</div></div>
+                    </div>
+                    <div class="mockup-messages">
+                      <div class="mockup-msg other"><div class="mockup-msg-avatar" style="background:linear-gradient(135deg,#ed4245,#f0b232);">A</div><div class="mockup-bubble">Hey! Welcome to Synto 🎉</div></div>
+                      <div class="mockup-msg me"><div class="mockup-bubble mine">Thanks! This looks amazing ✨</div></div>
+                      <div class="mockup-msg other"><div class="mockup-msg-avatar" style="background:linear-gradient(135deg,#ed4245,#f0b232);">A</div><div class="mockup-bubble">Right? The dark mode is chef's kiss 😍</div></div>
+                      <div class="mockup-msg me"><div class="mockup-bubble mine">Totally agree! Let me check the servers 🔥</div></div>
+                    </div>
+                    <div class="mockup-input-bar"><div class="mockup-input">Type a message...</div><div class="mockup-send-btn">➤</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        
+          <section id="landing-features" class="landing-features-section">
+            <h2 class="landing-section-title">Why Synto?</h2>
+            <div class="landing-features-grid">
+              <div class="landing-feature-card">
+                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                <h3>Private & Secure</h3>
+                <p>Your conversations stay private. No ads, no tracking.</p>
+              </div>
+              <div class="landing-feature-card">
+                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                <h3>Communities</h3>
+                <p>Servers with channels, roles, and permissions.</p>
+              </div>
+              <div class="landing-feature-card">
+                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
+                <h3>Express Yourself</h3>
+                <p>GIFs, emojis, file sharing, reactions and more.</p>
+              </div>
+              <div class="landing-feature-card">
+                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg></div>
+                <h3>Custom Themes</h3>
+                <p>Dark, light, midnight, forest, coffee, sunset — pick your vibe.</p>
+              </div>
+            </div>
+          </section>
+        
+          <section id="landing-about" class="landing-about-section">
+            <h2 class="landing-section-title">About Synto</h2>
+            <p class="landing-about-text">Synto was born from a simple idea: a chat app that respects your time and your privacy. No ads, no data harvesting, no bloated features you never asked for. Just clean, fast, and beautiful messaging for you and the people you care about.</p>
+            <p class="landing-about-text">We believe communication tools should fade into the background — they should work flawlessly so you can focus on what matters: the conversation. Every pixel is designed with intention, every interaction crafted to feel natural.</p>
+            <p class="landing-about-text">Whether you're chatting one-on-one, organizing a gaming community, or running a study group — Synto scales with you. Servers, roles, permissions, GIFs, files, custom themes. It's your space.</p>
+            <div class="landing-about-cta">
+              <button id="open-webapp-btn-2" class="landing-btn primary">Get Started</button>
+            </div>
+          </section>
+        
+          <footer class="landing-footer">
+            <div class="landing-brand"><span class="landing-logo">S</span><span class="landing-brand-name">Synto</span></div>
+            <p class="landing-footer-text">Built with care. No tracking. No ads. Just chat.</p>
+          </footer>
+        </main>
+      </div>
+    
+      <div id="landing-transition" class="landing-transition"></div>
+    </div>
+  </div>
+
   <!-- ===== Auth Screen ===== -->
   <div id="auth-screen" class="screen">
     <div class="auth-card">
