@@ -963,24 +963,41 @@ function renderReactions(container, reactions, messageId) {
   });
 }
 
+// Variáveis de controle para evitar spam
+let isSendingDM = false;
+let isSendingServer = false;
+
 function setupChatForm() {
   document.getElementById('chat-form').addEventListener('submit', async (e) => {
-    e.preventDefault(); if (!activeFriend) return;
+    e.preventDefault(); 
+    if (!activeFriend || isSendingDM) return; // Trava se já estiver enviando
+    
     const input = document.getElementById('chat-input');
     if (!input.value.trim()) return;
+    
+    isSendingDM = true; // Liga a trava
+    const btn = e.target.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+
     try {
       const { message } = await api('/messages', { method: 'POST', body: JSON.stringify({ receiver_id: activeFriend.id, content: input.value, reply_to: replyDM?.id }) });
       appendMessage(message); 
       playSound('send');
       input.value = '';
       cancelReplyDM();
-    } catch (err) { alert(err.message); }
+    } catch (err) { 
+      showToast(err.message, 'error'); 
+    } finally {
+      isSendingDM = false; // Destrava
+      if (btn) btn.disabled = false;
+      input.focus();
+    }
   });
 
   document.getElementById('cancel-reply-btn-dm').addEventListener('click', cancelReplyDM);
   document.getElementById('cancel-reply-btn-server').addEventListener('click', cancelReplyServer);
 
-  // Lógica dos GIFs (mantém o que já tinha)
+  // Lógica dos GIFs (mantém a original)
   const gifPicker = document.getElementById('gif-picker');
   document.getElementById('open-gif-btn').addEventListener('click', async () => {
     gifPicker.classList.toggle('hidden');
@@ -998,6 +1015,33 @@ function setupChatForm() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => loadGifTab('search', e.target.value), 500);
   });
+}
+
+async function sendServerMessage(event) {
+  event.preventDefault();
+  if (!activeServer || !activeChannel || isSendingServer) return; // Trava se já estiver enviando
+  
+  const input = document.getElementById('server-chat-input');
+  if (!input.value.trim()) return;
+  
+  isSendingServer = true; // Liga a trava
+  const btn = event.target.querySelector('button[type="submit"]');
+  if (btn) btn.disabled = true;
+
+  try {
+    await api(`/servers/${activeServer.id}/channels/${activeChannel.id}/messages`, {
+      method: 'POST', body: JSON.stringify({ content: input.value, reply_to: replyServer?.id })
+    });
+    playSound('send');
+    input.value = '';
+    cancelReplyServer();
+  } catch (err) { 
+    showToast(err.message, 'error'); 
+  } finally {
+    isSendingServer = false; // Destrava
+    if (btn) btn.disabled = false;
+    input.focus();
+  }
 }
 
 function setReplyDM(message) {
@@ -1416,22 +1460,6 @@ function appendServerMessage(message) {
   div.appendChild(avatar);
   div.appendChild(body);
   msgEl.scrollTop = msgEl.scrollHeight;
-}
-
-async function sendServerMessage(event) {
-  event.preventDefault();
-  if (!activeServer || !activeChannel) return;
-  const input = document.getElementById('server-chat-input');
-  if (!input.value.trim()) return;
-  
-  try {
-    await api(`/servers/${activeServer.id}/channels/${activeChannel.id}/messages`, {
-      method: 'POST', body: JSON.stringify({ content: input.value, reply_to: replyServer?.id })
-    });
-    playSound('send');
-    input.value = '';
-    cancelReplyServer();
-  } catch (err) { alert(err.message); }
 }
 
 async function copyServerInvite() {
