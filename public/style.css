@@ -1921,8 +1921,8 @@ img.emoji {
   z-index: 3;
 }
 .reactions-container:not(:empty) {
-  margin-top: -10px;
-  margin-bottom: 8px;
+  margin-top: -2px;
+  margin-bottom: 10px;
   padding: 0 2px;
 }
 .reactions-container:empty { display: none; }
