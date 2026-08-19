@@ -407,8 +407,18 @@
     </div>
   </div>
 
-  <!-- ===== Notification Container ===== -->
-  <div id="notification-container" class="notification-container"></div>
+  <!-- ===== Toast Container (Notificações rápidas) ===== -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- ===== Modal Customizado (Para Confirmar/Editar) ===== -->
+  <div id="custom-modal" class="modal-backdrop hidden">
+    <div class="custom-modal-card">
+      <h2 id="custom-modal-title">Title</h2>
+      <p id="custom-modal-content" class="muted small" style="margin-bottom: 16px;"></p>
+      <input type="text" id="custom-modal-input" class="hidden" style="width: 100%; margin-bottom: 20px; box-sizing: border-box;" />
+      <div id="custom-modal-actions" class="custom-modal-actions"></div>
+    </div>
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>

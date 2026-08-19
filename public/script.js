@@ -122,6 +122,78 @@ async function api(path, options = {}) {
 function avatarOrDefault(url) { return url && url.trim() ? url : DEFAULT_AVATAR; }
 function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str ?? ''; return div.innerHTML; }
 
+// ---------- Modais e Toasts Customizados ----------
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(-100%)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function showConfirm({ title, content, confirmText = 'Confirm', onConfirm }) {
+  const modal = document.getElementById('custom-modal');
+  document.getElementById('custom-modal-title').textContent = title;
+  document.getElementById('custom-modal-content').textContent = content;
+  document.getElementById('custom-modal-input').classList.add('hidden');
+  
+  const actions = document.getElementById('custom-modal-actions');
+  actions.innerHTML = '';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-secondary';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = () => modal.classList.add('hidden');
+  
+  const okBtn = document.createElement('button');
+  okBtn.textContent = confirmText;
+  okBtn.className = 'btn-danger';
+  okBtn.onclick = () => {
+    modal.classList.add('hidden');
+    if (onConfirm) onConfirm();
+  };
+  
+  actions.append(cancelBtn, okBtn);
+  modal.classList.remove('hidden');
+}
+
+function showPrompt({ title, label, defaultValue = '', confirmText = 'Save', onSubmit }) {
+  const modal = document.getElementById('custom-modal');
+  document.getElementById('custom-modal-title').textContent = title;
+  document.getElementById('custom-modal-content').textContent = label;
+  
+  const input = document.getElementById('custom-modal-input');
+  input.value = defaultValue;
+  input.classList.remove('hidden');
+  
+  const actions = document.getElementById('custom-modal-actions');
+  actions.innerHTML = '';
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-secondary';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = () => modal.classList.add('hidden');
+  
+  const okBtn = document.createElement('button');
+  okBtn.textContent = confirmText;
+  okBtn.onclick = () => {
+    const val = input.value.trim();
+    modal.classList.add('hidden');
+    if (onSubmit) onSubmit(val);
+  };
+  
+  actions.append(cancelBtn, okBtn);
+  modal.classList.remove('hidden');
+  setTimeout(() => input.focus(), 50);
+}
+
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -833,9 +905,14 @@ function appendMessage(message) {
     delBtn.innerHTML = '🗑';
     delBtn.title = 'Delete';
     delBtn.onclick = async () => {
-      if (confirm('Delete this message?')) {
-        try { await api(`/messages/${message.id}`, { method: 'DELETE' }); } catch(e) { alert(e.message); }
-      }
+      showConfirm({
+        title: 'Delete Message',
+        content: 'Are you sure you want to delete this message?',
+        confirmText: 'Delete',
+        onConfirm: async () => {
+          try { await api(`/messages/${message.id}`, { method: 'DELETE' }); } catch(e) { showToast(e.message, 'error'); }
+        }
+      });
     };
     actions.appendChild(delBtn);
 
@@ -998,7 +1075,7 @@ async function loadGifTab(tab, query = 'hello') {
             await api('/gifs/favorites', { method: 'POST', body: JSON.stringify({ gif_url: url }) });
             favBtn.textContent = '✔';
           }
-        } catch(err) { alert(err.message); }
+        } catch(err) { showToast(err.message, 'error'); }
       };
 
       wrap.appendChild(img);
@@ -1198,12 +1275,19 @@ function renderChannels(channels) {
       editBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`;
       editBtn.onclick = (e) => {
         e.stopPropagation();
-        const newName = prompt('Enter new channel name:', ch.name);
-        if (newName && newName.trim()) {
-          api(`/channels/${ch.id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) })
-            .then(() => openServerChat(activeServer))
-            .catch(err => alert(err.message));
-        }
+        showPrompt({
+          title: 'Edit Channel',
+          label: 'Enter the new channel name:',
+          defaultValue: ch.name,
+          confirmText: 'Save',
+          onSubmit: (newName) => {
+            if (newName) {
+              api(`/channels/${ch.id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) })
+                .then(() => openServerChat(activeServer))
+                .catch(err => showToast(err.message, 'error'));
+            }
+          }
+        });
       };
 
       const delBtn = document.createElement('button');
@@ -1212,12 +1296,18 @@ function renderChannels(channels) {
       delBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>`;
       delBtn.onclick = async (e) => {
         e.stopPropagation();
-        if (confirm(`Delete channel #${ch.name}? All messages will be lost.`)) {
-          try {
-            await api(`/channels/${ch.id}`, { method: 'DELETE' });
-            openServerChat(activeServer);
-          } catch(err) { alert(err.message); }
-        }
+        showConfirm({
+          title: 'Delete Channel',
+          content: `Are you sure you want to delete #${ch.name}? All messages will be lost.`,
+          confirmText: 'Delete',
+          onConfirm: async () => {
+            try {
+              await api(`/channels/${ch.id}`, { method: 'DELETE' });
+              openServerChat(activeServer);
+              showToast('Channel deleted', 'success');
+            } catch(err) { showToast(err.message, 'error'); }
+          }
+        });
       };
 
       actions.append(editBtn, delBtn);
@@ -1309,9 +1399,14 @@ function appendServerMessage(message) {
       delBtn.innerHTML = '🗑';
       delBtn.title = 'Delete';
       delBtn.onclick = async () => {
-        if (confirm('Delete this message?')) {
-          try { await api(`/servers/${activeServer.id}/messages/${message.id}`, { method: 'DELETE' }); } catch(e) { alert(e.message); }
-        }
+        showConfirm({
+          title: 'Delete Message',
+          content: 'Are you sure you want to delete this message?',
+          confirmText: 'Delete',
+          onConfirm: async () => {
+            try { await api(`/servers/${activeServer.id}/messages/${message.id}`, { method: 'DELETE' }); } catch(e) { showToast(e.message, 'error'); }
+          }
+        });
       };
       actions.appendChild(delBtn);
     }
