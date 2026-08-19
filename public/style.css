@@ -1,9 +1,3 @@
-/* ===================================================================
-   TEMAS
-   Cada tema e' apenas um conjunto de variaveis CSS. Pra criar um tema
-   novo, copie um bloco [data-theme="..."] e ajuste as cores.
-   =================================================================== */
-
 :root {
   --accent: #5865f2;
   --accent-hover: #4752c4;
@@ -18,6 +12,9 @@
   --border: #3a3c41;
   --text: #f2f3f5;
   --text-muted: #9a9ca1;
+  --shadow-color: rgba(0,0,0,0.4);
+  --brand-glow: rgba(88, 101, 242, 0.35);
+  --brand-to: #00d4ff;
 }
 
 [data-theme="light"] {
@@ -27,6 +24,9 @@
   --border: #dcdfe4;
   --text: #1e1f22;
   --text-muted: #6b6f76;
+  --shadow-color: rgba(30,31,34,0.12);
+  --brand-glow: rgba(88, 101, 242, 0.12);
+  --brand-to: #2563eb;
 }
 
 [data-theme="midnight"] {
@@ -36,6 +36,9 @@
   --border: #262d47;
   --text: #e7e9f5;
   --text-muted: #8890b5;
+  --shadow-color: rgba(0,0,0,0.5);
+  --brand-glow: rgba(120, 140, 255, 0.4);
+  --brand-to: #7dd3fc;
 }
 
 [data-theme="forest"] {
@@ -45,6 +48,9 @@
   --border: #2e4137;
   --text: #eaf3ec;
   --text-muted: #8fa89a;
+  --shadow-color: rgba(0,0,0,0.4);
+  --brand-glow: rgba(143, 214, 168, 0.3);
+  --brand-to: #7ee2a8;
 }
 
 [data-theme="coffee"] {
@@ -54,6 +60,9 @@
   --border: #5c3a16;
   --text: #f5e6d3;
   --text-muted: #c9a876;
+  --shadow-color: rgba(0,0,0,0.4);
+  --brand-glow: rgba(240, 178, 50, 0.3);
+  --brand-to: #f0b232;
 }
 
 * { box-sizing: border-box; }
@@ -87,7 +96,8 @@ svg { width: 20px; height: 20px; display: block; }
   padding: 32px;
   border-radius: 12px;
   width: 340px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  box-shadow: 0 10px 30px var(--shadow-color);
+  border: 1px solid var(--border);
 }
 
 .brand {
@@ -535,8 +545,9 @@ button:hover { background: var(--accent-hover); }
   background: var(--bg-elevated);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  box-shadow: 0 20px 50px var(--shadow-color);
   text-align: center;
+  border: 1px solid var(--border);
 }
 
 .modal-close {
@@ -1033,7 +1044,7 @@ textarea:focus {
   align-items: center;
   gap: 12px;
   width: 320px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  box-shadow: 0 10px 30px var(--shadow-color);
   transform: translateX(400px);
   opacity: 0;
   transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -1113,42 +1124,6 @@ textarea:focus {
 .status-dot.busy { background: var(--danger); }
 .status-dot.invisible { background: var(--text-muted); }
 
-/* ===== Scrollbar Bonita ===== */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.4);
-  background-clip: content-box;
-}
-
-[data-theme="light"] * {
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-}
-
-[data-theme="light"] ::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.2);
-  background-clip: content-box;
-}
-
 /* Corrigando o scroll nas telas de configurações e amigos */
 #view-settings, #view-friends, #view-users {
   overflow-y: auto !important;
@@ -1227,7 +1202,7 @@ textarea:focus {
   z-index: 100;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 30px var(--shadow-color);
 }
 
 .gif-tabs { display: flex; border-bottom: 1px solid var(--border); }
@@ -1349,7 +1324,7 @@ textarea:focus {
   display: none; 
   gap: 2px; 
   z-index: 5; 
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+  box-shadow: 0 2px 4px var(--shadow-color); 
 }
 .message-wrapper:hover .message-actions, .server-message:hover .message-actions { display: flex; }
 .message-actions button { background: transparent; border: none; color: var(--text-muted); padding: 4px 6px; cursor: pointer; font-size: 14px; }
@@ -1385,63 +1360,6 @@ textarea:focus {
 .reply-context.hidden { display: none; }
 
 .deleted-msg { font-style: italic; color: var(--text-muted); opacity: 0.7; }
-
-/* ===== Home Redesenada ===== */
-.home-layout {
-  display: flex;
-  gap: 20px;
-  padding: 20px;
-  max-width: 900px;
-  margin: 0 auto;
-  align-items: flex-start;
-}
-
-.home-profile-card {
-  flex: 1;
-  max-width: 400px;
-  margin: 0;
-}
-
-.profile-banner {
-  height: 180px; /* Aumenta o banner */
-  background-color: var(--bg-elevated-2);
-}
-
-.home-quick-actions {
-  flex: 1;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px;
-  margin-top: 20px;
-}
-
-.home-quick-actions h2 { margin-top: 0; margin-bottom: 16px; }
-
-.quick-action-btn {
-  width: 100%;
-  background: var(--bg-elevated-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 15px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  margin-bottom: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.quick-action-btn:hover {
-  background: var(--border);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.quick-action-btn svg { width: 20px; height: 20px; }
 
 /* ===== Canais Hover (Editar/Deletar) ===== */
 .channel-wrap {
@@ -1494,7 +1412,7 @@ textarea:focus {
   border-left: 4px solid var(--accent);
   padding: 12px 20px;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px var(--shadow-color);
   min-width: 250px;
   font-size: 14px;
   color: var(--text);
@@ -1516,7 +1434,8 @@ textarea:focus {
   border-radius: 12px;
   width: 400px;
   max-width: 90%;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 30px var(--shadow-color);
+  border: 1px solid var(--border);
 }
 
 .custom-modal-card h2 { margin-top: 0; font-size: 20px; }
@@ -1528,25 +1447,62 @@ textarea:focus {
 
 /* ===== Home Synto ===== */
 .home-container {
-  max-width: 1000px;
+  max-width: 1040px;
   margin: 0 auto;
-  padding: 40px 20px;
+  padding: 32px 20px 40px;
+  overflow-y: auto;
+  height: 100%;
 }
 
 .home-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 24px;
 }
 
 .brand-name {
-  font-size: 56px;
+  font-size: 48px;
   margin: 0;
   font-weight: 800;
-  letter-spacing: 4px;
-  background: linear-gradient(135deg, var(--accent), #00d4ff);
+  letter-spacing: 3px;
+  background: linear-gradient(135deg, var(--accent), var(--brand-to));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 20px rgba(88, 101, 242, 0.3);
+  color: var(--text);
+  text-shadow: 0 0 24px var(--brand-glow);
+}
+
+.home-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  max-width: 720px;
+  margin: 0 auto 28px;
+}
+
+.home-stat-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.home-stat-card:hover { border-color: var(--accent); }
+
+.home-stat-number {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.home-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 .home-layout {
@@ -1562,7 +1518,7 @@ textarea:focus {
 }
 
 .profile-banner {
-  height: 220px;
+  height: 200px;
   background-size: cover;
   background-position: center;
   border-bottom: 4px solid var(--accent);
@@ -1574,8 +1530,23 @@ textarea:focus {
 }
 
 .profile-card-body h2 {
-  font-size: 28px;
-  margin-top: 8px;
+  font-size: 26px;
+  margin: 6px 0 0;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: -14px;
+  position: relative;
+  z-index: 1;
 }
 
 .bio-box {
@@ -1584,6 +1555,7 @@ textarea:focus {
   background: var(--bg-elevated-2);
   border-radius: 8px;
   border-left: 3px solid var(--accent);
+  text-align: left;
 }
 
 .bio-box .bio {
@@ -1594,35 +1566,91 @@ textarea:focus {
 
 .home-side {
   flex: 1;
+  min-width: 260px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  position: sticky;
-  top: 20px;
+  gap: 16px;
 }
 
-.home-quick-actions {
+.home-widget, .home-quick-actions {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 24px;
+  padding: 18px;
 }
 
-.home-quick-actions h2 { margin-top: 0; margin-bottom: 16px; font-size: 18px; }
+.home-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.home-widget h2, .home-quick-actions h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.widget-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(88, 101, 242, 0.12);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.widget-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.widget-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.widget-item:hover { background: var(--bg-elevated-2); }
+
+.widget-item .avatar { width: 28px; height: 28px; }
+
+.widget-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+.widget-item-sub { color: var(--text-muted); font-size: 11px; }
+
+.widget-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 14px 4px;
+}
+
+.home-quick-actions h2 { margin-bottom: 12px; }
 
 .quick-action-btn {
   width: 100%;
   background: var(--bg-elevated-2);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 15px;
+  padding: 13px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 12px;
   cursor: pointer;
-  margin-bottom: 10px;
-  font-size: 15px;
+  margin-bottom: 8px;
+  font-size: 14px;
   font-weight: 600;
   transition: all 0.2s;
 }
@@ -1636,9 +1664,8 @@ textarea:focus {
   transform: translateY(-2px);
 }
 
-.quick-action-btn svg { width: 20px; height: 20px; }
+.quick-action-btn svg { width: 18px; height: 18px; }
 
 @media (max-width: 768px) {
   .home-layout { flex-direction: column; }
-  .home-side { position: static; }
 }

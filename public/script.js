@@ -1,4 +1,3 @@
-// script.js
 let currentUser = null;
 let socket = null;
 let activeFriend = null;
@@ -18,7 +17,6 @@ let serverLoadingMore = false;
 
 let audioCtx = null;
 
-// Inicializa o áudio quando o usuário clica (resolve o bloqueio do navegador)
 function initAudio() {
   if (!audioCtx) {
     try {
@@ -31,7 +29,6 @@ function initAudio() {
 }
 
 function playSound(type) {
-  // Só bloqueia o som se o status for explicitamente diferente de online
   if (currentUser && currentUser.status && currentUser.status !== 'online' && type !== 'login') return;
   
   initAudio();
@@ -43,25 +40,24 @@ function playSound(type) {
     const filter = audioCtx.createBiquadFilter();
     
     filter.type = 'lowpass';
-    filter.frequency.value = 2000; // Deixa o som suave (sem 8-bit)
+    filter.frequency.value = 2000;
     
     masterGain.connect(filter);
     filter.connect(audioCtx.destination);
     
-    // CORREÇÃO: O volume principal precisa ser 1 para o som sair!
     masterGain.gain.value = 1.0;
     
     let freqs = [];
     let dur = 0.2;
 
     if (type === 'send') {
-      freqs = [523.25, 659.25]; // Dó, Mi
+      freqs = [523.25, 659.25];
       dur = 0.15;
     } else if (type === 'receive') {
-      freqs = [659.25, 523.25]; // Mi, Dó
+      freqs = [659.25, 523.25];
       dur = 0.25;
     } else if (type === 'login') {
-      freqs = [392, 523.25, 659.25]; // Sol, Dó, Mi
+      freqs = [392, 523.25, 659.25];
       dur = 0.4;
     } else {
       return;
@@ -69,14 +65,13 @@ function playSound(type) {
 
     freqs.forEach((f, i) => {
       const osc = audioCtx.createOscillator();
-      osc.type = 'sine'; // Onda senoidal = som puro e suave
+      osc.type = 'sine';
       osc.frequency.value = f;
-      osc.detune.value = Math.random() * 10 - 5; // Leve defasagem
+      osc.detune.value = Math.random() * 10 - 5;
       
       const oscGain = audioCtx.createGain();
       const startTime = now + (i * 0.08);
       
-      // Volume de cada nota (aumentado para 0.3 para garantir que saia)
       oscGain.gain.setValueAtTime(0, startTime);
       oscGain.gain.linearRampToValueAtTime(0.3, startTime + 0.02);
       oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
@@ -111,59 +106,6 @@ function showNotification(title, body, avatarUrl) {
     setTimeout(() => notif.remove(), 400);
   }, 4000);
 }
-
-// ========== EMOJI SHORTCODES (estilo Discord) ==========
-const EMOJI_MAP = {
-  smile: '😄', grinning: '😀', laugh: '😂', joy: '😂', rofl: '🤣',
-  wink: '😉', blush: '😊', heart_eyes: '😍', kissing_heart: '😘',
-  thinking: '🤔', neutral: '😐', expressionless: '😑', confused: '😕',
-  worried: '😟', cry: '😢', sob: '😭', angry: '😠', rage: '😡',
-  thumbsup: '👍', thumbsdown: '👎', ok_hand: '👌', clap: '👏',
-  wave: '👋', pray: '🙏', muscle: '💪', fire: '🔥', 100: '💯',
-  heart: '❤️', hearts: '💕', broken_heart: '💔', sparkles: '✨',
-  star: '⭐', star2: '🌟', zap: '⚡', boom: '💥', tada: '🎉',
-  party: '🥳', gift: '🎁', cake: '🎂', coffee: '☕', pizza: '🍕',
-  beer: '🍺', wine: '🍷', rocket: '🚀', eyes: '👀', skull: '💀',
-  ghost: '👻', alien: '👽', robot: '🤖', cat: '🐱', dog: '🐶',
-  fox: '🦊', lion: '🦁', unicorn: '🦄', dragon: '🐉',
-  sun: '☀️', moon: '🌙', cloud: '☁️', rain: '🌧️', snow: '❄️',
-  check: '✅', x: '❌', warning: '⚠️', question: '❓',
-  exclamation: '❗', bangbang: '‼️', interrobang: '⁉️',
-  pencil: '✏️', book: '📖', link: '🔗', lock: '🔒', unlock: '🔓',
-  key: '🔑', money: '💰', gem: '💎', trophy: '🏆', medal: '🏅',
-  crown: '👑', sunglasses: '😎', nerd: '🤓', cool: '😎',
-  sleepy: '😴', yawning: '🥱', sick: '🤒', mask: '😷',
-  poop: '💩', peach: '🍑', eggplant: '🍆', banana: '🍌',
-  apple: '🍎', grape: '🍇', cherry: '🍒', strawberry: '🍓',
-  // aliases comuns
-  ':D': '😄', ':)': '🙂', ':(': '🙁', ';)': '😉',
-  '<3': '❤️', '</3': '💔', ':P': '😛', ':p': '😛',
-  'xD': '😆', 'XD': '😆'
-};
-
-function parseEmojis(text) {
-  if (!text) return '';
-  // shortcodes :name:
-  let result = text.replace(/:([a-z0-9_+-]+):/gi, (match, name) => {
-    const key = name.toLowerCase();
-    return EMOJI_MAP[key] || match;
-  });
-  // aliases simples
-  result = result.replace(/:D/g, '😄').replace(/:\)/g, '🙂').replace(/:\(/g, '🙁')
-                 .replace(/;\)/g, '😉').replace(/<3/g, '❤️').replace(/<\/3/g, '💔')
-                 .replace(/:P/gi, '😛').replace(/xD/gi, '😆');
-  return result;
-}
-
-function renderWithEmojis(el) {
-  if (!el || typeof twemoji === 'undefined') return;
-  twemoji.parse(el, {
-    folder: 'svg',
-    ext: '.svg',
-    base: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/'
-  });
-}
-
 const DEFAULT_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#5865f2"/><text x="50%" y="55%" font-size="32" fill="white" text-anchor="middle" font-family="sans-serif">?</text></svg>`);
 
 async function api(path, options = {}) {
@@ -179,7 +121,6 @@ async function api(path, options = {}) {
 function avatarOrDefault(url) { return url && url.trim() ? url : DEFAULT_AVATAR; }
 function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str ?? ''; return div.innerHTML; }
 
-// ---------- Modais e Toasts Customizados ----------
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -323,7 +264,6 @@ function setupScrollListeners() {
   });
 }
 
-// ---------- Auth ----------
 function setupAuthTabs() {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -339,7 +279,7 @@ function setupAuthTabs() {
 function setupAuthForms() {
   document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    initAudio(); // ATIVA O ÁUDIO AQUI!
+    initAudio();
     try {
       const { user } = await api('/login', { method: 'POST', body: JSON.stringify({
         username: document.getElementById('login-username').value.trim(),
@@ -351,7 +291,7 @@ function setupAuthForms() {
 
   document.getElementById('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    initAudio(); // ATIVA O ÁUDIO AQUI!
+    initAudio();
     try {
       const { user } = await api('/register', { method: 'POST', body: JSON.stringify({
         username: document.getElementById('register-username').value.trim(),
@@ -373,13 +313,12 @@ function enterApp() {
   document.getElementById('app-screen').classList.remove('hidden');
   renderProfile(); 
   connectSocket(); 
-  loadFriends(); 
+  loadFriends().then(renderHomeExtras); 
   loadFriendRequests(); 
+  loadServers().then(renderHomeExtras);
   setupStatus();
   playSound('login');
   switchView('home');
-  setupHomeStatus();
-  updateHomeOnlineFriends();
 }
 
 function connectSocket() {
@@ -395,23 +334,28 @@ function connectSocket() {
     if (isActiveChat) {
       appendMessage(message);
       if (!isSender) playSound('receive');
-      if (friend) friend.unread_count = 0; // Zera se já estiver aberto
+      if (friend) friend.unread_count = 0;
     } else {
       if (!isSender) {
         playSound('receive');
         showNotification(friend?.display_name || 'New Message', message.content, avatarOrDefault(friend?.avatar));
         if (friend) {
-          friend.unread_count = (friend.unread_count || 0) + 1; // Incrementa
+          friend.unread_count = (friend.unread_count || 0) + 1;
         }
       }
     }
+    if (friend) {
+      friend.last_message = message.content.startsWith('img:') ? 'GIF' : message.content;
+      friend.last_message_at = message.created_at;
+    }
     updateUnreadBadges();
+    renderHomeExtras();
   });
 
   socket.on('presence', ({ userId, online }) => {
     if (online) onlineFriendIds.add(userId); else onlineFriendIds.delete(userId);
     updateOnlineIndicators();
-    updateHomeOnlineFriends();   // <-- adicionar
+    renderHomeExtras();
   });
   socket.on('new_server_message', (message) => {
     if (activeServer && activeChannel && message.server_id === activeServer.id && message.channel_id === activeChannel.id) {
@@ -428,7 +372,6 @@ function connectSocket() {
   });
 
     socket.on('reaction_added', (data) => {
-    // Se a mensagem estiver na tela, adiciona a reação visualmente
     const msgEl = document.querySelector(`[data-message-id="${data.messageId}"]`);
     if (msgEl) {
       const container = msgEl.querySelector('.reactions-container');
@@ -511,6 +454,71 @@ function setupHome() {
   });
 }
 
+function renderHomeExtras() {
+  const statsRow = document.getElementById('home-stats-row');
+  if (statsRow) {
+    const onlineCount = cachedFriends.filter(f => onlineFriendIds.has(f.id)).length;
+    const unreadTotal = cachedFriends.reduce((sum, f) => sum + (f.unread_count || 0), 0);
+    const stats = [
+      { number: cachedFriends.length, label: 'Friends', action: 'friends' },
+      { number: onlineCount, label: 'Online Now', action: 'friends' },
+      { number: cachedServers.length, label: 'Servers', action: 'servers' },
+      { number: unreadTotal, label: 'Unread', action: 'chat' }
+    ];
+    statsRow.innerHTML = '';
+    stats.forEach(s => {
+      const card = document.createElement('div');
+      card.className = 'home-stat-card';
+      card.innerHTML = `<div class="home-stat-number">${s.number}</div><div class="home-stat-label">${s.label}</div>`;
+      card.addEventListener('click', () => switchView(s.action));
+      statsRow.appendChild(card);
+    });
+  }
+
+  const pill = document.getElementById('profile-status-pill');
+  if (pill && currentUser) {
+    const status = currentUser.status || 'online';
+    const labels = { online: 'Online', away: 'Away', busy: 'Do Not Disturb', invisible: 'Invisible' };
+    pill.innerHTML = `<span class="status-dot ${status}"></span>${labels[status] || 'Online'}`;
+  }
+
+  const onlineList = document.getElementById('online-friends-list');
+  const onlineCountEl = document.getElementById('online-friends-count');
+  if (onlineList) {
+    const onlineFriends = cachedFriends.filter(f => onlineFriendIds.has(f.id));
+    if (onlineCountEl) onlineCountEl.textContent = onlineFriends.length;
+    onlineList.innerHTML = '';
+    if (onlineFriends.length === 0) {
+      onlineList.innerHTML = '<li class="widget-empty">No friends online right now</li>';
+    } else {
+      onlineFriends.slice(0, 8).forEach(f => {
+        const li = document.createElement('li');
+        li.className = 'widget-item';
+        li.innerHTML = `<img class="avatar" src="${avatarOrDefault(f.avatar)}" /><span class="widget-item-name">${escapeHtml(f.display_name)}</span>`;
+        li.addEventListener('click', () => { switchView('chat'); openChat(f); });
+        onlineList.appendChild(li);
+      });
+    }
+  }
+
+  const activityList = document.getElementById('recent-activity-list');
+  if (activityList) {
+    const withMessages = cachedFriends.filter(f => f.last_message_at).sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
+    activityList.innerHTML = '';
+    if (withMessages.length === 0) {
+      activityList.innerHTML = '<li class="widget-empty">No recent conversations yet</li>';
+    } else {
+      withMessages.slice(0, 6).forEach(f => {
+        const li = document.createElement('li');
+        li.className = 'widget-item';
+        li.innerHTML = `<img class="avatar" src="${avatarOrDefault(f.avatar)}" /><span class="widget-item-name">${escapeHtml(f.display_name)}</span><span class="widget-item-sub">${escapeHtml((f.last_message || '').substring(0, 18))}</span>`;
+        li.addEventListener('click', () => { switchView('chat'); openChat(f); });
+        activityList.appendChild(li);
+      });
+    }
+  }
+}
+
 function setupStatus() {
   const grid = document.getElementById('status-grid');
   if (!grid) return;
@@ -528,12 +536,12 @@ function setupStatus() {
         await api('/status', { method: 'PUT', body: JSON.stringify({ status }) });
         currentUser.status = status;
         updateActiveStatus();
+        renderHomeExtras();
       } catch (err) { alert(err.message); }
     });
   });
 }
 
-// ---------- Nav ----------
 function setupNav() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -550,10 +558,9 @@ function switchView(view) {
   else if (view === 'servers') { show('view-servers'); loadServers(); }
   else if (view === 'settings') { show('view-settings'); fillSettingsForm(); }
   else if (view === 'chat') { show('view-chat'); renderChatFriendList(); }
-  else show('view-home');
+  else { show('view-home'); renderHomeExtras(); }
 }
 
-// ---------- Home ----------
 function renderProfile() {
   document.getElementById('profile-avatar').src = avatarOrDefault(currentUser.avatar);
   document.getElementById('profile-display-name').textContent = currentUser.display_name;
@@ -571,73 +578,19 @@ function renderProfile() {
   const homeUserEl = document.getElementById('home-username');
   if (homeUserEl) homeUserEl.textContent = currentUser.display_name;
 
-  updateHomeOnlineFriends();
+  renderHomeExtras();
 }
 
-function updateHomeOnlineFriends() {
-  const container = document.getElementById('home-online-friends');
-  if (!container) return;
-
-  const online = cachedFriends.filter(f => onlineFriendIds.has(f.id));
-  container.innerHTML = '';
-
-  if (online.length === 0) {
-    container.innerHTML = '<p class="muted small">No friends online</p>';
-    return;
-  }
-
-  online.slice(0, 8).forEach(friend => {
-    const item = document.createElement('div');
-    item.className = 'home-friend-item';
-    item.innerHTML = `
-      <img class="avatar" src="${avatarOrDefault(friend.avatar)}" />
-      <div class="name theme-name">${escapeHtml(friend.display_name)}</div>
-    `;
-    item.onclick = () => { switchView('chat'); openChat(friend); };
-    container.appendChild(item);
-  });
-}
-
-function setupHomeStatus() {
-  const grid = document.getElementById('home-status-grid');
-  if (!grid) return;
-  const buttons = grid.querySelectorAll('.status-btn');
-
-  function updateActive() {
-    buttons.forEach(b => b.classList.toggle('active', b.dataset.status === currentUser.status));
-  }
-  updateActive();
-
-  buttons.forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const status = btn.dataset.status;
-      try {
-        await api('/status', { method: 'PUT', body: JSON.stringify({ status }) });
-        currentUser.status = status;
-        updateActive();
-        // também atualiza o grid das settings se existir
-        const settingsGrid = document.getElementById('status-grid');
-        if (settingsGrid) {
-          settingsGrid.querySelectorAll('.status-btn').forEach(b => 
-            b.classList.toggle('active', b.dataset.status === status)
-          );
-        }
-      } catch (err) { showToast(err.message, 'error'); }
-    });
-  });
-}
-
-// ---------- Friends & Chat ----------
 function setupFriendsView() {
   const form = document.getElementById('add-friend-form');
   if (form) {
     form.addEventListener('submit', async (e) => {
-      e.preventDefault(); // Impede a página de recarregar
+      e.preventDefault();
       const input = document.getElementById('friend-serial-input');
       const errorEl = document.getElementById('add-friend-error');
       const btn = document.getElementById('send-friend-request-btn');
       
-      if (!input.value.trim()) return; // Não faz nada se estiver vazio
+      if (!input.value.trim()) return;
       
       btn.textContent = 'Sending...';
       btn.disabled = true;
@@ -648,7 +601,7 @@ function setupFriendsView() {
         input.value = ''; 
         errorEl.style.color = 'var(--online)'; 
         errorEl.textContent = 'Request sent!';
-        loadFriendRequests(); // Atualiza a lista na hora
+        loadFriendRequests();
       } catch (err) { 
         errorEl.style.color = 'var(--danger)'; 
         errorEl.textContent = err.message; 
@@ -677,7 +630,7 @@ async function loadFriendRequests() {
       li.querySelector('.clickable').addEventListener('click', () => openProfileModal(req.id, 'stranger'));
       li.querySelector('.accept-btn').addEventListener('click', async () => { 
         await api('/friends/accept', { method: 'POST', body: JSON.stringify({ request_id: req.request_id }) }); 
-        loadFriendRequests(); loadFriends(); 
+        loadFriendRequests(); loadFriends().then(renderHomeExtras); 
       });
       li.querySelector('.decline-btn').addEventListener('click', async () => { 
         await api('/friends/decline', { method: 'POST', body: JSON.stringify({ request_id: req.request_id }) }); 
@@ -708,6 +661,11 @@ async function loadFriendRequests() {
 async function loadFriends() {
   try {
     const { friends } = await api('/friends');
+    const previous = new Map(cachedFriends.map(f => [f.id, f]));
+    friends.forEach(f => {
+      const prev = previous.get(f.id);
+      if (prev) { f.last_message = prev.last_message; f.last_message_at = prev.last_message_at; }
+    });
     cachedFriends = friends;
     const list = document.getElementById('friends-list');
     list.innerHTML = '';
@@ -722,14 +680,13 @@ async function loadFriends() {
       li.innerHTML = `<div class="clickable"><div class="avatar-wrap"><img class="avatar" src="${avatarOrDefault(friend.avatar)}" />${badgeHtml}</div><div class="info"><div class="name">${escapeHtml(friend.display_name)}</div><div class="muted small">${friend.serial_id}</div></div></div><div class="actions"><button class="chat-btn btn-secondary" title="Message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button><button class="remove-btn btn-danger" title="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button></div>`;
       li.querySelector('.clickable').addEventListener('click', () => openProfileModal(friend.id, 'friend'));
       li.querySelector('.chat-btn').addEventListener('click', () => { switchView('chat'); openChat(friend); });
-      li.querySelector('.remove-btn').addEventListener('click', async () => { await api('/friends/' + friend.id, { method: 'DELETE' }); loadFriends(); });
+      li.querySelector('.remove-btn').addEventListener('click', async () => { await api('/friends/' + friend.id, { method: 'DELETE' }); loadFriends().then(renderHomeExtras); });
       list.appendChild(li);
     });
     updateUnreadBadges();
   } catch (err) {}
 }
 
-// ---------- Users ----------
 function setupUsersView() {
   document.getElementById('user-search-btn').addEventListener('click', async () => {
     const input = document.getElementById('user-search-input');
@@ -746,7 +703,6 @@ function setupUsersView() {
   });
 }
 
-// ---------- GIF Picker para Avatar/Banner ----------
 let gifSelectTarget = null;
 
 function setupGifSelectModal() {
@@ -825,7 +781,6 @@ async function confirmGifSelect(url) {
   }
 }
 
-// ---------- Settings ----------
 function setupSettingsView() {
   document.getElementById('settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -850,7 +805,6 @@ function setupSettingsView() {
       successEl.textContent = 'Profile updated!';
       setTimeout(() => successEl.textContent = '', 2000);
     } catch (err) {
-      // Se der erro, agora vai aparecer o toast vermelho na tela!
       showToast(err.message, 'error');
     } finally {
       btn.textContent = originalText;
@@ -868,7 +822,6 @@ function setupSettingsView() {
     }
   });
 
-  // Resto da função (upload de avatar/banner) continua igual...
   document.getElementById('avatar-input').addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file) return;
     const formData = new FormData(); formData.append('avatar', file);
@@ -916,7 +869,6 @@ function setupAppearance() {
   });
 }
 
-// ---------- Chat ----------
 function renderChatFriendList() {
   const list = document.getElementById('chat-friends-list');
   list.innerHTML = '';
@@ -947,7 +899,6 @@ function updateUnreadBadges() {
     }
   }
 
-  // Atualiza a lista de amigos
   const friendsList = document.getElementById('friends-list');
   if (friendsList) {
     cachedFriends.forEach(friend => {
@@ -971,7 +922,6 @@ function updateUnreadBadges() {
     });
   }
 
-  // Atualiza a lista de DMs
   const chatList = document.getElementById('chat-friends-list');
   if (chatList) {
     cachedFriends.forEach(friend => {
@@ -1014,7 +964,6 @@ async function openChat(friend) {
     document.getElementById('chat-header-name').textContent = friend.display_name;
     document.getElementById('chat-header-status').textContent = onlineFriendIds.has(friend.id) ? '● Online' : '● Offline';
     
-    // Limpa o contador de não lidas
     friend.unread_count = 0;
     updateUnreadBadges();
     
@@ -1074,10 +1023,10 @@ function appendMessage(message, prepend = false) {
     bubble.innerHTML = `<img src="${url}" style="max-width:100%; border-radius:8px; display:block;" />`;
     wrapper.dataset.content = "GIF";
   } else {
-    bubble.textContent = parseEmojis(message.content);
+    bubble.textContent = message.content;
     wrapper.dataset.content = message.content;
-    renderWithEmojis(bubble);
   }
+  wrapper.appendChild(bubble);
 
   if (!message.deleted_at) {
     const actions = document.createElement('div');
@@ -1130,7 +1079,7 @@ function appendMessage(message, prepend = false) {
     reactionsContainer.className = 'reactions-container';
     if (message.reactions) renderReactions(reactionsContainer, message.reactions, message.id);
 
-    wrapper.appendChild(reactBtn); // mantém o botão flutuante antigo se precisar
+    wrapper.appendChild(reactBtn);
     wrapper.appendChild(actions);
     wrapper.appendChild(emojiPicker);
     wrapper.appendChild(reactionsContainer);
@@ -1166,7 +1115,6 @@ function renderReactions(container, reactions, messageId) {
   });
 }
 
-// Variáveis de controle para evitar spam
 let isSendingDM = false;
 let isSendingServer = false;
 
@@ -1189,8 +1137,7 @@ function setupChatForm() {
       input.value = '';
       cancelReplyDM();
     } catch (err) { 
-      showToast(err.message, 'error'); // Mostra o aviso de "slow down"
-      // Se for erro de rate limit, mantém a mensagem na caixa para o usuário não perder o que digitou
+      showToast(err.message, 'error');
       if (!err.message.includes('fast')) input.value = input.value;
     } finally {
       isSendingDM = false;
@@ -1202,7 +1149,6 @@ function setupChatForm() {
   document.getElementById('cancel-reply-btn-dm').addEventListener('click', cancelReplyDM);
   document.getElementById('cancel-reply-btn-server').addEventListener('click', cancelReplyServer);
 
-  // Lógica dos GIFs (mantém a original)
   const gifPicker = document.getElementById('gif-picker');
   document.getElementById('open-gif-btn').addEventListener('click', async () => {
     gifPicker.classList.toggle('hidden');
@@ -1241,7 +1187,7 @@ async function sendServerMessage(event) {
     input.value = '';
     cancelReplyServer();
   } catch (err) { 
-    showToast(err.message, 'error'); // Mostra o aviso
+    showToast(err.message, 'error');
   } finally {
     isSendingServer = false;
     if (btn) btn.disabled = false;
@@ -1336,7 +1282,6 @@ async function loadGifTab(tab, query = 'hello') {
   }
 }
 
-// ---------- Profile Modal ----------
 function setupProfileModal() {
   document.getElementById('profile-modal-close').addEventListener('click', () => document.getElementById('profile-modal').classList.add('hidden'));
   document.getElementById('profile-modal').addEventListener('click', (e) => { if (e.target.id === 'profile-modal') e.currentTarget.classList.add('hidden'); });
@@ -1366,7 +1311,7 @@ async function openProfileModal(userId, relation, requestId) {
       const btn = document.createElement('button');
       btn.className = 'btn-danger';
       btn.textContent = 'Remove Friend';
-      btn.addEventListener('click', async () => { await api('/friends/' + user.id, { method: 'DELETE' }); loadFriends(); closeProfileModal(); });
+      btn.addEventListener('click', async () => { await api('/friends/' + user.id, { method: 'DELETE' }); loadFriends().then(renderHomeExtras); closeProfileModal(); });
       actionsEl.appendChild(btn);
     } else {
       const isFriend = cachedFriends.some(f => f.id === user.id);
@@ -1387,7 +1332,6 @@ function closeProfileModal() {
   document.getElementById('profile-modal').classList.add('hidden');
 }
 
-// ==================== SERVERS ====================
 function setupServersView() {
   document.getElementById('server-create-form').addEventListener('submit', createServer);
   document.getElementById('server-join-form').addEventListener('submit', joinServer);
@@ -1413,7 +1357,7 @@ async function createServer(event) {
   const input = document.getElementById('server-name-input');
   try {
     const { server } = await api('/servers', { method: 'POST', body: JSON.stringify({ name: input.value.trim() }) });
-    input.value = ''; await loadServers(); openServerChat(server);
+    input.value = ''; await loadServers().then(renderHomeExtras); openServerChat(server);
   } catch (error) { document.getElementById('server-error').textContent = error.message; }
 }
 
@@ -1422,7 +1366,7 @@ async function joinServer(event) {
   const input = document.getElementById('server-invite-input');
   try {
     const { server } = await api('/servers/join', { method: 'POST', body: JSON.stringify({ invite_code: input.value.trim() }) });
-    input.value = ''; await loadServers(); openServerChat(server);
+    input.value = ''; await loadServers().then(renderHomeExtras); openServerChat(server);
   } catch (error) { document.getElementById('server-error').textContent = error.message; }
 }
 
@@ -1514,7 +1458,6 @@ function renderChannels(channels) {
     });
     wrap.appendChild(btn);
 
-    // Botões de Editar e Deletar (Apenas para o dono)
     if (activeServer.owner_id === currentUser.id) {
       const actions = document.createElement('div');
       actions.className = 'channel-actions';
@@ -1626,9 +1569,8 @@ function appendServerMessage(message, prepend = false) {
     contentEl.textContent = 'Mensagem apagada';
     div.dataset.content = '';
   } else {
-    contentEl.textContent = parseEmojis(message.content);
+    contentEl.textContent = message.content;
     div.dataset.content = message.content;
-    renderWithEmojis(contentEl);
   }
   body.appendChild(contentEl);
 
@@ -1686,7 +1628,6 @@ async function copyServerInvite() {
   } catch {}
 }
 
-// ---------- Server Settings ----------
 async function renderServerSettings() {
   if (!activeServer) return;
   document.getElementById('server-edit-name').value = activeServer.name;
@@ -1696,7 +1637,6 @@ async function renderServerSettings() {
     const data = await api('/servers/' + activeServer.id + '/data');
     serverDataCache = data;
     
-    // Roles
     const rolesList = document.getElementById('server-roles-list');
     rolesList.innerHTML = '';
     data.roles.forEach(role => {
@@ -1706,14 +1646,12 @@ async function renderServerSettings() {
       rolesList.appendChild(li);
     });
 
-    // Members & Role Assignment/Removal
     const membersList = document.getElementById('server-members-list');
     membersList.innerHTML = '';
     data.members.forEach(m => {
       const userRoleIds = data.memberRoles.filter(mr => mr.user_id === m.user_id).map(mr => mr.role_id);
       const userRoles = data.roles.filter(r => userRoleIds.includes(r.id));
       
-      // Gera as "etiquetas" de cargo. Se clicar, remove o cargo.
       const rolesHtml = userRoles.map(r => `
         <span class="role-badge" data-role-id="${r.id}" title="Click to remove role" style="cursor:pointer; border:1px solid ${r.color}; color:${r.color}; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:4px; display:inline-flex; align-items:center; gap:4px;">
           ${escapeHtml(r.name)} <span style="opacity:0.7; font-size:9px;">✖</span>
@@ -1725,7 +1663,6 @@ async function renderServerSettings() {
       li.style.flexWrap = 'wrap';
       li.innerHTML = `<img class="avatar" src="${avatarOrDefault(m.users.avatar)}" style="width: 30px; height: 30px;" /><div class="info" style="flex:1;"><div class="name">${escapeHtml(m.users.display_name)}</div><div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">${rolesHtml || '<span class="muted small" style="font-size:11px;">No roles</span>'}</div></div>`;
       
-      // Dropdown para adicionar cargos
       const select = document.createElement('select');
       select.style.marginLeft = 'auto';
       select.style.background = 'var(--bg-elevated-2)';
@@ -1761,7 +1698,6 @@ async function renderServerSettings() {
         } catch (err) { alert(err.message); }
       });
 
-      // Adiciona evento de remover cargo nas etiquetas
       li.querySelectorAll('.role-badge').forEach(badge => {
         badge.addEventListener('click', async () => {
           const roleId = Number(badge.dataset.roleId);
@@ -1779,7 +1715,6 @@ async function renderServerSettings() {
       membersList.appendChild(li);
     });
 
-    // Channel Perms Select
     const select = document.getElementById('perm-channel-select');
     select.innerHTML = '';
     data.channels.forEach(ch => {
@@ -1801,21 +1736,18 @@ async function loadChannelMessages() {
   
   msgEl.innerHTML = '<p class="muted small">Loading...</p>';
   
-  // 1. Verificar permissão
   let canSend = true;
   if (serverDataCache) {
     if (activeServer.owner_id !== currentUser.id) {
       const userRoles = serverDataCache.memberRoles.filter(mr => mr.user_id === currentUser.id).map(mr => mr.role_id);
       const overrides = serverDataCache.overrides.filter(o => o.channel_id === activeChannel.id && userRoles.includes(o.role_id));
       
-      // Se existir uma regra dizendo can_send_messages: false, ele está mutado
       if (overrides.some(o => o.can_send_messages === false)) {
         canSend = false;
       }
     }
   }
 
-  // 2. Mostrar/Esconder a barra de mensagem
   if (canSend) {
     formEl.classList.remove('hidden');
     lockedEl.classList.add('hidden');
@@ -1824,7 +1756,6 @@ async function loadChannelMessages() {
     lockedEl.classList.remove('hidden');
   }
 
-  // 3. Caregar mensagens
   try {
     const { messages } = await api(`/servers/${activeServer.id}/channels/${activeChannel.id}/messages`);
     msgEl.innerHTML = '';
