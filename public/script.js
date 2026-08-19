@@ -655,38 +655,59 @@ async function confirmGifSelect(url) {
 function setupSettingsView() {
   document.getElementById('settings-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { user } = await api('/profile', { method: 'PUT', body: JSON.stringify({
-      display_name: document.getElementById('settings-display-name').value.trim(),
-      bio: document.getElementById('settings-bio').value
-    })});
-    currentUser = user; renderProfile();
-    const successEl = document.getElementById('settings-success');
-    successEl.textContent = 'Profile updated!';
-    setTimeout(() => successEl.textContent = '', 2000);
+    const btn = e.target.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    try {
+      const { user } = await api('/profile', { 
+        method: 'PUT', 
+        body: JSON.stringify({
+          display_name: document.getElementById('settings-display-name').value.trim(),
+          bio: document.getElementById('settings-bio').value
+        })
+      });
+      
+      currentUser = user; 
+      renderProfile();
+      
+      const successEl = document.getElementById('settings-success');
+      successEl.textContent = 'Profile updated!';
+      setTimeout(() => successEl.textContent = '', 2000);
+    } catch (err) {
+      // Se der erro, agora vai aparecer o toast vermelho na tela!
+      showToast(err.message, 'error');
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
   });
 
   document.getElementById('logout-btn').addEventListener('click', async () => {
-    await api('/logout', { method: 'POST' });
-    if (socket) socket.disconnect();
-    location.reload();
+    try {
+      await api('/logout', { method: 'POST' });
+      if (socket) socket.disconnect();
+      location.reload();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   });
 
+  // Resto da função (upload de avatar/banner) continua igual...
   document.getElementById('avatar-input').addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file) return;
     const formData = new FormData(); formData.append('avatar', file);
-    try { const { user } = await api('/upload/avatar', { method: 'POST', body: formData }); currentUser = user; renderProfile(); fillSettingsForm(); } catch (err) { document.getElementById('upload-error').textContent = err.message; }
+    try { const { user } = await api('/upload/avatar', { method: 'POST', body: formData }); currentUser = user; renderProfile(); fillSettingsForm(); } catch (err) { showToast(err.message, 'error'); }
     e.target.value = '';
   });
 
   document.getElementById('banner-input').addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file) return;
     const formData = new FormData(); formData.append('banner', file);
-    try { const { user } = await api('/upload/banner', { method: 'POST', body: formData }); currentUser = user; renderProfile(); fillSettingsForm(); } catch (err) { document.getElementById('upload-error').textContent = err.message; }
+    try { const { user } = await api('/upload/banner', { method: 'POST', body: formData }); currentUser = user; renderProfile(); fillSettingsForm(); } catch (err) { showToast(err.message, 'error'); }
     e.target.value = '';
   });
-
-  document.getElementById('avatar-gif-btn').addEventListener('click', () => openGifSelectModal('avatar'));
-  document.getElementById('banner-gif-btn').addEventListener('click', () => openGifSelectModal('banner'));
 }
 
 function fillSettingsForm() {
@@ -871,6 +892,7 @@ function appendMessage(message) {
   if (message.deleted_at) {
     bubble.classList.add('deleted-msg');
     bubble.textContent = 'Mensagem apagada';
+    wrapper.dataset.content = '';
   } else if (message.content.startsWith('img:')) {
     const url = message.content.replace('img:', '');
     bubble.innerHTML = `<img src="${url}" style="max-width:100%; border-radius:8px; display:block;" />`;

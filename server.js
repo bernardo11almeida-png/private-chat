@@ -41,6 +41,15 @@ const loginLimiter = rateLimit({
   message: { error: 'Muitas tentativas. Tente novamente em alguns minutos.' }
 });
 
+// ---------- Rate limiting para Mensagens ----------
+const messageLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  limit: 30, // Máximo de 30 mensagens por minuto por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'You are sending messages too fast. Please slow down.' }
+});
+
 // ---------- Uploads (memória -> Supabase Storage) ----------
 const ALLOWED_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const upload = multer({
@@ -229,6 +238,33 @@ app.put('/api/status', requireAuth, async (req, res) => {
 });
 
 // ---------- Perfil ----------
+
+app.put('/api/profile', requireAuth, async (req, res) => {
+  const { display_name, bio } = req.body;
+  try {
+    const { data: current } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
+    
+    const { data: updated, error } = await supabase.from('users')
+      .update({
+        display_name: display_name ?? current.display_name,
+        bio: bio ?? current.bio
+      })
+      .eq('id', req.session.userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Erro Supabase ao salvar perfil:', error);
+      return res.status(500).json({ error: 'Banco de dados recusou a alteração.' });
+    }
+
+    res.json({ user: publicUser(updated) });
+  } catch (err) {
+    console.error('Erro interno ao salvar perfil:', err);
+    res.status(500).json({ error: 'Erro interno no servidor.' });
+  }
+});
+
 app.put('/api/profile/avatar-url', requireAuth, async (req, res) => {
   const { url } = req.body;
   if (!url || !/^https?:\/\//.test(url)) return res.status(400).json({ error: 'URL invalida' });
@@ -436,14 +472,14 @@ app.put('/api/friends/:friendId/meta', requireAuth, async (req, res) => {
 });
 
 // ---------- Mensagens ----------
-const MESSAGES_PAGE_SIZE = 30;
+const MESSAGES_PAGE_SIZE = 50;
 
 app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
   const friendId = Number(req.params.friendId);
   const before = req.query.before ? Number(req.query.before) : null;
   if (!await areFriends(req.session.userId, friendId)) return res.status(403).json({ error: 'Nao sao amigos' });
 
-  let query = supabase.from('messages').select('*, reply_to')
+  let query = supabase.from('messages').select('*, reply_to, deleted_at, image') // Adicionado deleted_at e image aqui
     .or(`and(sender_id.eq.${req.session.userId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${req.session.userId})`)
     .order('id', { ascending: false })
     .limit(MESSAGES_PAGE_SIZE);
@@ -460,15 +496,41 @@ app.get('/api/messages/:friendId', requireAuth, async (req, res) => {
   res.json({ messages: rows, has_more: rows.length === MESSAGES_PAGE_SIZE });
 });
 
-app.post('/api/messages', requireAuth, async (req, res) => {
+app.post('/api/messages', requireAuth, messageLimiter, async (req, res) => {
+  // 1. Autenticação já feita pelo requireAuth (usa a sessão, não confia no cliente)
+  const sender_id = req.session.userId; 
+  
+  // 2. Validação de Input
   const { receiver_id, content, reply_to } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
-  if (!await areFriends(req.session.userId, receiver_id)) return res.status(403).json({ error: 'Nao sao amigos' });
-  if (await isBlocked(req.session.userId, receiver_id)) return res.status(403).json({ error: 'Bloqueado' });
+  
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return res.status(400).json({ error: 'Mensagem vazia ou invalida' });
+  }
+  if (content.length > 4000) {
+    return res.status(400).json({ error: 'Mensagem muito longa (max 4000 chars)' });
+  }
+  if (!receiver_id || isNaN(Number(receiver_id))) {
+    return res.status(400).json({ error: 'Destinatario invalido' });
+  }
 
-  const { data: message } = await supabase.from('messages')
-    .insert({ sender_id: req.session.userId, receiver_id: receiver_id, content: content.trim(), reply_to: reply_to || null })
+  // 3. Autorização (Verifica se são amigos e se não estão bloqueados)
+  if (!await areFriends(sender_id, Number(receiver_id))) return res.status(403).json({ error: 'Nao sao amigos' });
+  if (await isBlocked(sender_id, Number(receiver_id))) return res.status(403).json({ error: 'Bloqueado' });
+
+  // 4. Inserção segura no banco (Apenas os campos necessários)
+  const { data: message, error } = await supabase.from('messages')
+    .insert({ 
+      sender_id: sender_id, 
+      receiver_id: Number(receiver_id), 
+      content: content.trim(),
+      reply_to: reply_to ? Number(reply_to) : null
+    })
     .select().single();
+
+  if (error) {
+    console.error('Erro ao salvar mensagem:', error);
+    return res.status(500).json({ error: 'Erro interno ao enviar mensagem' });
+  }
 
   io.to('user:' + receiver_id).emit('new_message', message);
   res.json({ message });
@@ -494,8 +556,12 @@ app.delete('/api/messages/:id', requireAuth, async (req, res) => {
   const { data: message } = await supabase.from('messages').select('*').eq('id', Number(req.params.id)).maybeSingle();
   if (!message || message.sender_id !== req.session.userId) return res.status(404).json({ error: 'Nao encontrada' });
 
-  await supabase.from('messages').update({ content: 'Mensagem apagada', image: null, deleted_at: new Date().toISOString() }).eq('id', message.id);
-  if (message.image) await deleteOldUpload(message.image);
+  const { error } = await supabase.from('messages').update({ content: 'Mensagem apagada', image: null, deleted_at: new Date().toISOString() }).eq('id', message.id);
+  
+  if (error) {
+    console.error('Erro do Supabase ao deletar DM:', error);
+    return res.status(500).json({ error: 'O banco de dados recusou a exclusão. Verifique se a coluna deleted_at existe.' });
+  }
 
   io.to('user:' + message.receiver_id).emit('message_deleted', { messageId: message.id });
   io.to('user:' + message.sender_id).emit('message_deleted', { messageId: message.id });
@@ -677,32 +743,55 @@ app.get('/api/servers/:id/channels/:channelId/messages', requireAuth, async (req
   const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
   if (!member) return res.status(403).json({ error: 'Voce nao esta nesse servidor' });
 
+  // Pega as últimas 50 mensagens (descending) e depois inverte a ordem para mostrar na tela
   const { data: messages } = await supabase.from('server_messages')
-    .select('*, users:sender_id(id, serial_id, username, display_name, avatar)')
+    .select('*, deleted_at, reply_to, users:sender_id(id, serial_id, username, display_name, avatar)')
     .eq('server_id', serverId).eq('channel_id', channelId)
-    .order('id', { ascending: true }).limit(50);
+    .order('id', { ascending: false })
+    .limit(50);
+  
+  messages.reverse();
+  
   res.json({ messages });
 });
 
-app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, async (req, res) => {
+app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, messageLimiter, async (req, res) => {
   const { id: serverId, channelId } = req.params;
   const { content, reply_to } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
   
+  // Validação de Input
+  if (!content || typeof content !== 'string' || !content.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
+  if (content.length > 4000) return res.status(400).json({ error: 'Mensagem muito longa' });
+  
+  // Autorização (Verifica se está no servidor)
   const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
   if (!member) return res.status(403).json({ error: 'Voce nao esta nesse servidor' });
 
+  // Verifica permissão de canal (se não está mutado)
   const { data: userRoles } = await supabase.from('server_member_roles').select('role_id').eq('server_id', serverId).eq('user_id', req.session.userId);
   const roleIds = (userRoles || []).map(r => r.role_id);
   const { data: overrides } = await supabase.from('channel_role_permissions')
     .select('can_send_messages').eq('channel_id', channelId).in('role_id', roleIds);
     
-  const isBlocked = overrides.some(o => o.can_send_messages === false);
-  if (isBlocked) return res.status(403).json({ error: 'Voce nao tem permissao para falar neste canal' });
+  if (overrides.some(o => o.can_send_messages === false)) {
+    return res.status(403).json({ error: 'Voce nao tem permissao para falar neste canal' });
+  }
 
-  const { data: message } = await supabase.from('server_messages')
-    .insert({ server_id: serverId, channel_id: channelId, sender_id: req.session.userId, content: content.trim(), reply_to: reply_to || null })
+  // Inserção segura
+  const { data: message, error } = await supabase.from('server_messages')
+    .insert({ 
+      server_id: Number(serverId), 
+      channel_id: Number(channelId), 
+      sender_id: req.session.userId, 
+      content: content.trim(),
+      reply_to: reply_to ? Number(reply_to) : null
+    })
     .select('*, users:sender_id(id, serial_id, username, display_name, avatar)').single();
+  
+  if (error) {
+    console.error('Erro ao salvar msg servidor:', error);
+    return res.status(500).json({ error: 'Erro interno' });
+  }
   
   io.to('server:' + serverId).emit('new_server_message', message);
   res.json({ message });
@@ -729,7 +818,12 @@ app.delete('/api/servers/:serverId/messages/:msgId', requireAuth, async (req, re
 
   if (!isOwner && !canManage) return res.status(403).json({ error: 'No permission' });
 
-  await supabase.from('server_messages').update({ content: 'Mensagem apagada', deleted_at: new Date().toISOString() }).eq('id', msgId);
+  const { error } = await supabase.from('server_messages').update({ content: 'Mensagem apagada', deleted_at: new Date().toISOString() }).eq('id', msgId);
+  if (error) {
+    console.error('Erro do Supabase ao deletar msg de servidor:', error);
+    return res.status(500).json({ error: 'O banco de dados recusou a exclusão.' });
+  }
+
   io.to('server:' + serverId).emit('server_message_deleted', { messageId: Number(msgId) });
   res.json({ ok: true });
 });
