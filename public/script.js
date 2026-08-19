@@ -332,20 +332,18 @@ async function init() {
   forceGifButton();
 
   // Botão da landing
-  document.getElementById('open-webapp-btn')?.addEventListener('click', () => {
-    showAuthScreen();
-  });
 
   document.addEventListener('click', (e) => {
     document.querySelectorAll('.emoji-ac:not(.hidden)').forEach(ac => {
       if (!ac.contains(e.target)) ac.classList.add('hidden');
     });
   });
+  
 
-// No init(), APAGA os dois blocos do open-webapp-btn e coloca:
-document.querySelectorAll('#open-webapp-btn, #open-webapp-btn-2').forEach(btn => {
-  btn.addEventListener('click', () => transitionToApp());
-});
+  // No init(), APAGA os dois blocos do open-webapp-btn e coloca:
+  document.querySelectorAll('#open-webapp-btn, #open-webapp-btn-2').forEach(btn => {
+    btn.addEventListener('click', () => transitionToApp());
+  });
 }
 
 // Nav links da landing
@@ -402,6 +400,26 @@ function enterApp() {
   setupStatus();
   playSound('login');
   switchView('home');
+}
+
+function transitionToApp() {
+  const overlay = document.getElementById('landing-transition');
+  overlay.style.transition = 'transform 0.45s cubic-bezier(.77, 0, .175, 1)';
+  overlay.style.transformOrigin = 'bottom';
+  overlay.style.transform = 'scaleY(1)';
+
+  setTimeout(async () => {
+    try {
+      const { user } = await api('/me');
+      currentUser = user;
+      enterApp();
+    } catch {
+      showAuthScreen();
+    }
+    void overlay.offsetWidth;
+    overlay.style.transformOrigin = 'top';
+    overlay.style.transform = 'scaleY(0)';
+  }, 500);
 }
 
 function transitionToApp() {
@@ -481,11 +499,6 @@ function setupAuthForms() {
       document.getElementById('register-error').textContent = err.message;
     }
   });
-}
-
-function showAuthScreen() {
-  document.getElementById('auth-screen').classList.remove('hidden');
-  document.getElementById('app-screen').classList.add('hidden');
 }
 
 // ================== SOCKET ==================
