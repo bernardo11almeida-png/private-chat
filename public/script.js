@@ -11,6 +11,10 @@ let activeChannel = null;
 let serverDataCache = null;
 let replyDM = null;
 let replyServer = null;
+let dmHasMore = true;
+let dmLoadingMore = false;
+let serverHasMore = true;
+let serverLoadingMore = false;
 
 let audioCtx = null;
 
@@ -209,12 +213,61 @@ async function init() {
   setupGifSelectModal();
   setupServersView();
   setupHome();
+  setupScrollListeners();
 
   try {
     const { user } = await api('/me');
     currentUser = user;
     enterApp();
   } catch { showAuthScreen(); }
+}
+
+function setupScrollListeners() {
+  const dmEl = document.getElementById('chat-messages');
+  dmEl.addEventListener('scroll', async () => {
+    if (dmEl.scrollTop < 50 && dmHasMore && !dmLoadingMore && activeFriend) {
+      dmLoadingMore = true;
+      const firstMsg = dmEl.querySelector('.message-wrapper');
+      if (!firstMsg) { dmLoadingMore = false; return; }
+      const firstId = firstMsg.dataset.messageId;
+      
+      const oldHeight = dmEl.scrollHeight;
+      
+      try {
+        const { messages, has_more } = await api(`/messages/${activeFriend.id}?before=${firstId}`);
+        dmHasMore = has_more;
+        messages.reverse().forEach(msg => appendMessage(msg, true));
+        dmEl.scrollTop += dmEl.scrollHeight - oldHeight;
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        dmLoadingMore = false;
+      }
+    }
+  });
+
+  const serverEl = document.getElementById('server-chat-messages');
+  serverEl.addEventListener('scroll', async () => {
+    if (serverEl.scrollTop < 50 && serverHasMore && !serverLoadingMore && activeServer && activeChannel) {
+      serverLoadingMore = true;
+      const firstMsg = serverEl.querySelector('.server-message');
+      if (!firstMsg) { serverLoadingMore = false; return; }
+      const firstId = firstMsg.dataset.messageId;
+      
+      const oldHeight = serverEl.scrollHeight;
+      
+      try {
+        const { messages, has_more } = await api(`/servers/${activeServer.id}/channels/${activeChannel.id}/messages?before=${firstId}`);
+        serverHasMore = has_more;
+        messages.reverse().forEach(msg => appendServerMessage(msg, true));
+        serverEl.scrollTop += serverEl.scrollHeight - oldHeight;
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        serverLoadingMore = false;
+      }
+    }
+  });
 }
 
 // ---------- Auth ----------
@@ -847,16 +900,17 @@ async function openChat(friend) {
     const messagesEl = document.getElementById('chat-messages');
     messagesEl.innerHTML = '<p class="muted small">Loading...</p>';
     
-    api('/messages/' + friend.id).then(({ messages }) => {
+    api('/messages/' + friend.id).then(({ messages, has_more }) => {
       messagesEl.innerHTML = '';
-      messages.forEach(appendMessage);
+      dmHasMore = has_more;
+      messages.forEach(m => appendMessage(m, false));
     }).catch(err => {
       messagesEl.innerHTML = `<p class="form-error">${err.message}</p>`;
     });
   }, 50);
 }
 
-function appendMessage(message) {
+function appendMessage(message, prepend = false) {
   if (!activeFriend) return;
   const messagesEl = document.getElementById('chat-messages');
   
@@ -865,7 +919,8 @@ function appendMessage(message) {
     wrapper = document.createElement('div');
     wrapper.className = 'message-wrapper ' + (message.sender_id === currentUser.id ? 'mine' : 'theirs');
     wrapper.dataset.messageId = message.id;
-    messagesEl.appendChild(wrapper);
+    if (prepend) messagesEl.prepend(wrapper);
+    else messagesEl.appendChild(wrapper);
   } else {
     wrapper.innerHTML = '';
   }
@@ -1386,14 +1441,15 @@ function renderChannels(channels) {
   loadChannelMessages();
 }
 
-function appendServerMessage(message) {
+function appendServerMessage(message, prepend = false) {
   const msgEl = document.getElementById('server-chat-messages');
   let div = msgEl.querySelector(`[data-message-id="${message.id}"]`);
   if (!div) {
     div = document.createElement('div');
     div.className = 'server-message' + (message.sender_id === currentUser.id ? ' mine' : '');
     div.dataset.messageId = message.id;
-    msgEl.appendChild(div);
+    if (prepend) msgEl.prepend(div);
+    else msgEl.appendChild(div);
   } else {
     div.innerHTML = '';
   }

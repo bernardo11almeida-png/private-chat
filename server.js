@@ -740,19 +740,23 @@ app.put('/api/channels/:id/permissions', requireAuth, async (req, res) => {
 
 app.get('/api/servers/:id/channels/:channelId/messages', requireAuth, async (req, res) => {
   const { id: serverId, channelId } = req.params;
+  const before = req.query.before ? Number(req.query.before) : null;
+  
   const { data: member } = await supabase.from('server_members').select('id').eq('server_id', serverId).eq('user_id', req.session.userId).maybeSingle();
   if (!member) return res.status(403).json({ error: 'Voce nao esta nesse servidor' });
 
-  // Pega as últimas 50 mensagens (descending) e depois inverte a ordem para mostrar na tela
-  const { data: messages } = await supabase.from('server_messages')
+  let query = supabase.from('server_messages')
     .select('*, deleted_at, reply_to, users:sender_id(id, serial_id, username, display_name, avatar)')
     .eq('server_id', serverId).eq('channel_id', channelId)
     .order('id', { ascending: false })
     .limit(50);
+    
+  if (before) query = query.lt('id', before);
   
+  const { data: messages } = await query;
   messages.reverse();
   
-  res.json({ messages });
+  res.json({ messages, has_more: messages.length === 50 });
 });
 
 app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, messageLimiter, async (req, res) => {
