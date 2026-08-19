@@ -15,6 +15,158 @@ let dmLoadingMore = false;
 let serverHasMore = true;
 let serverLoadingMore = false;
 
+// ================== EMOJI SYSTEM (Twemoji - estilo Discord) ==================
+
+const EMOJI_MAP = {
+  // Rostos
+  smile:'😄', smiley:'😃', grin:'😁', joy:'😂', laughing:'😆', sweat_smile:'😅', rofl:'🤣',
+  wink:'😉', blush:'😊', innocent:'😇', slight_smile:'🙂', upside_down:'🙃',
+  heart_eyes:'😍', kissing_heart:'😘', yum:'😋', tongue:'😛', zany:'🤪',
+  raised_eyebrow:'🤨', neutral_face:'😐', expressionless:'😑', no_mouth:'😶',
+  smirk:'😏', unamused:'😒', roll_eyes:'🙄', grimacing:'😬', lying:'🤥',
+  relieved:'😌', pensive:'😔', sleepy:'😪', drool:'🤤', sleeping:'😴',
+  mask:'😷', hot:'🥵', cold:'🥶', woozy:'🥴', dizzy:'😵', mind_blown:'🤯',
+  cowboy:'🤠', party:'🥳', sunglasses:'😎', nerd:'🤓', monocle:'🧐',
+  thinking:'🤔', confused:'😕', worried:'😟', frown:'☹️', open_mouth:'😮',
+  hushed:'😯', astonished:'😲', flushed:'😳', scream:'😱', fearful:'😨',
+  cold_sweat:'😰', sweat:'😓', cry:'😢', sob:'😭', angry:'😠', rage:'😡',
+  cursing:'🤬', devil:'😈', skull:'💀', ghost:'👻', alien:'👽', robot:'🤖',
+  poop:'💩', clown:'🤡', pleading:'🥺', hugs:'🤗', shushing:'🤫', eyes:'👀',
+  // Aliases em português
+  feliz:'😄', triste:'😢', risada:'😂', risos:'😂', sorriso:'😊', raiva:'😠',
+  medo:'😨', sono:'😴', amor:'❤️', beijo:'😘', abraco:'🤗', obrigado:'🙏',
+  ola:'👋', oi:'👋', tchau:'👋', sim:'✅', nao:'❌', fogo:'🔥', top:'👍',
+  legal:'😎', festa:'🎉', parabens:'🎂', dinheiro:'💰', coroa:'👑',
+  foguete:'🚀', estrela:'⭐', raio:'⚡', sol:'☀️', lua:'🌙', chuva:'🌧️',
+  neve:'❄️', cafe:'☕', pizza:'🍕', bolo:'🍰', cerveja:'🍺', musica:'🎵',
+  computador:'💻', celular:'📱', jogo:'🎮', coracao:'❤️',
+  // Gestos
+  thumbsup:'👍', thumbsdown:'👎', '+1':'👍', '-1':'👎', ok_hand:'👌',
+  peace:'✌️', v:'✌️', wave:'👋', clap:'👏', pray:'🙏', handshake:'🤝',
+  muscle:'💪', facepalm:'🤦', shrug:'🤷', point_up:'☝️', point_right:'👉',
+  point_left:'👈', point_down:'👇', raised_hands:'🙌', call_me:'🤙', metal:'🤘',
+  // Corações
+  heart:'❤️', blue_heart:'💙', green_heart:'💚', yellow_heart:'💛',
+  purple_heart:'💜', black_heart:'🖤', white_heart:'🤍', orange_heart:'🧡',
+  broken_heart:'💔', two_hearts:'💕', sparkling_heart:'💖', gift_heart:'💝',
+  heartbeat:'💓', revolving_hearts:'💞', heart_exclamation:'❣️',
+  // Animais
+  dog:'🐶', cat:'🐱', mouse:'🐭', fox:'🦊', bear:'🐻', panda:'🐼',
+  koala:'🐨', tiger:'🐯', lion:'🦁', cow:'🐮', pig:'🐷', frog:'🐸',
+  monkey:'🐵', unicorn:'🦄', bee:'🐝', butterfly:'🦋', turtle:'🐢',
+  snake:'🐍', fish:'🐟', dolphin:'🐬', whale:'🐳', octopus:'🐙',
+  crab:'🦀', penguin:'🐧', owl:'🦉', chicken:'🐔',
+  // Comida
+  apple:'🍎', banana:'🍌', grape:'🍇', watermelon:'🍉', strawberry:'🍓',
+  cherry:'🍒', peach:'🍑', pineapple:'🍍', burger:'🍔', fries:'🍟',
+  taco:'🌮', popcorn:'🍿', cookie:'🍪', donut:'🍩', chocolate:'🍫',
+  candy:'🍬', cake:'🍰', birthday:'🎂', coffee:'☕', tea:'🍵', beer:'🍺',
+  wine:'🍷', cocktail:'🍸', tada:'🎉',
+  // Objetos e símbolos
+  fire:'🔥', sparkles:'✨', star:'⭐', star2:'🌟', boom:'💥', zap:'⚡',
+  rainbow:'🌈', sun:'☀️', moon:'🌙', cloud:'☁️', snowflake:'❄️', umbrella:'☔',
+  '100':'💯', hundred:'💯', check:'✅', white_check_mark:'✅', x:'❌',
+  question:'❓', exclamation:'❗', warning:'⚠️', no_entry:'⛔', crown:'👑',
+  gem:'💎', money:'💰', moneybag:'💰', rocket:'🚀', airplane:'✈️', car:'🚗',
+  trophy:'🏆', medal:'🏅', gift:'🎁', balloon:'🎈', bell:'🔔', bookmark:'🔖',
+  book:'📖', memo:'📝', pencil:'✏️', pushpin:'📌', lock:'🔒', unlock:'🔓',
+  key:'🔑', hammer:'🔨', wrench:'🔧', gear:'⚙️', mag:'🔍', flashlight:'🔦',
+  hourglass:'⏳', alarm:'⏰', calendar:'📅', computer:'💻', phone:'📱',
+  tv:'📺', camera:'📷', game:'🎮', controller:'🎮', headphones:'🎧',
+  music:'🎵', microphone:'🎤', guitar:'🎸', art:'🎨',
+  flag_br:'🇧🇷', flag_us:'🇺🇸'
+};
+
+const QUICK_EMOJIS = ['👍','❤️','😂','😮','😢','🙏','🔥','🎉','😍','🤔','😎','😭','👀','💯','🥰','😡','🤗','😭'];
+
+// Converte texto com unicode emoji para <img> Twemoji
+function toTwemoji(text) {
+  if (window.twemoji) return twemoji.parse(text, { size: '72x72' });
+  return text; // fallback: emoji nativo
+}
+
+// Escapa HTML, converte :shortcodes: em emojis e renderiza como Twemoji
+function parseEmojis(text) {
+  if (!text) return '';
+  let safe = escapeHtml(text);
+  safe = safe.replace(/:([a-zA-Z0-9_+-]{1,25}):/g, (match, name) => {
+    const emoji = EMOJI_MAP[name.toLowerCase()];
+    return emoji ? emoji : match;
+  });
+  return toTwemoji(safe);
+}
+
+function closeAllEmojiPickers(exceptWrapper) {
+  document.querySelectorAll('.emoji-quick-picker.show').forEach(p => {
+    if (!exceptWrapper || !exceptWrapper.contains(p)) p.classList.remove('show');
+  });
+}
+
+// ================== AUTOCOMPLETE :emoji: ==================
+function setupEmojiAutocomplete(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  let ac = document.createElement('div');
+  ac.className = 'emoji-ac hidden';
+  input.parentElement.style.position = 'relative';
+  input.parentElement.appendChild(ac);
+
+  let currentMatches = [];
+  let selIndex = 0;
+
+  function renderAc() {
+    ac.innerHTML = '';
+    currentMatches.forEach(([name, emoji], i) => {
+      const item = document.createElement('div');
+      item.className = 'emoji-ac-item' + (i === selIndex ? ' selected' : '');
+      item.innerHTML = `${toTwemoji(emoji)}<span class="emoji-ac-name">:${name}:</span>`;
+      item.onmousedown = (e) => { e.preventDefault(); insertMatch(name); };
+      ac.appendChild(item);
+    });
+  }
+
+  function insertMatch(name) {
+    const pos = input.selectionStart;
+    const before = input.value.substring(0, pos);
+    const after = input.value.substring(input.selectionEnd);
+    const newBefore = before.replace(/:([a-zA-Z0-9_+-]{1,25})$/, `:${name}: `);
+    input.value = newBefore + after;
+    input.focus();
+    input.setSelectionRange(newBefore.length, newBefore.length);
+    ac.classList.add('hidden');
+  }
+
+  input.addEventListener('input', () => {
+    const before = input.value.substring(0, input.selectionStart);
+    const match = before.match(/:([a-zA-Z0-9_+-]{1,25})$/);
+    if (match) {
+      const q = match[1].toLowerCase();
+      currentMatches = Object.entries(EMOJI_MAP)
+        .filter(([name]) => name.startsWith(q) || name.includes(q))
+        .slice(0, 8);
+      if (currentMatches.length) {
+        selIndex = 0;
+        renderAc();
+        ac.classList.remove('hidden');
+        return;
+      }
+    }
+    ac.classList.add('hidden');
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (ac.classList.contains('hidden')) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); selIndex = Math.min(selIndex + 1, currentMatches.length - 1); renderAc(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); selIndex = Math.max(selIndex - 1, 0); renderAc(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      insertMatch(currentMatches[selIndex][0]);
+    }
+    else if (e.key === 'Escape') ac.classList.add('hidden');
+  });
+}
+
 let audioCtx = null;
 
 function initAudio() {
@@ -29,53 +181,45 @@ function initAudio() {
 }
 
 function playSound(type) {
+  // Preferências de som (seção Notifications das Settings)
+  if (type === 'login') {
+    if (localStorage.getItem('pc_sound_login') === 'off') return;
+  } else {
+    if (localStorage.getItem('pc_sound_messages') === 'off') return;
+  }
   if (currentUser && currentUser.status && currentUser.status !== 'online' && type !== 'login') return;
-  
+
   initAudio();
   if (!audioCtx) return;
-  
+
   try {
     const now = audioCtx.currentTime;
     const masterGain = audioCtx.createGain();
     const filter = audioCtx.createBiquadFilter();
-    
     filter.type = 'lowpass';
     filter.frequency.value = 2000;
-    
     masterGain.connect(filter);
     filter.connect(audioCtx.destination);
-    
     masterGain.gain.value = 1.0;
-    
+
     let freqs = [];
     let dur = 0.2;
 
-    if (type === 'send') {
-      freqs = [523.25, 659.25];
-      dur = 0.15;
-    } else if (type === 'receive') {
-      freqs = [659.25, 523.25];
-      dur = 0.25;
-    } else if (type === 'login') {
-      freqs = [392, 523.25, 659.25];
-      dur = 0.4;
-    } else {
-      return;
-    }
+    if (type === 'send') { freqs = [523.25, 659.25]; dur = 0.15; }
+    else if (type === 'receive') { freqs = [659.25, 523.25]; dur = 0.25; }
+    else if (type === 'login') { freqs = [392, 523.25, 659.25]; dur = 0.4; }
+    else return;
 
     freqs.forEach((f, i) => {
       const osc = audioCtx.createOscillator();
       osc.type = 'sine';
       osc.frequency.value = f;
       osc.detune.value = Math.random() * 10 - 5;
-      
       const oscGain = audioCtx.createGain();
       const startTime = now + (i * 0.08);
-      
       oscGain.gain.setValueAtTime(0, startTime);
       oscGain.gain.linearRampToValueAtTime(0.3, startTime + 0.02);
       oscGain.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
-
       osc.connect(oscGain);
       oscGain.connect(masterGain);
       osc.start(startTime);
@@ -193,28 +337,6 @@ function showPrompt({ title, label, defaultValue = '', confirmText = 'Save', onS
 }
 
 document.addEventListener('DOMContentLoaded', init);
-
-async function init() {
-  setupAuthTabs();
-  setupAuthForms();
-  setupNav();
-  setupFriendsView();
-  setupUsersView();
-  setupSettingsView();
-  setupAppearance();
-  setupChatForm();
-  setupProfileModal();
-  setupGifSelectModal();
-  setupServersView();
-  setupHome();
-  setupScrollListeners();
-
-  try {
-    const { user } = await api('/me');
-    currentUser = user;
-    enterApp();
-  } catch { showAuthScreen(); }
-}
 
 function setupScrollListeners() {
   const dmEl = document.getElementById('chat-messages');
@@ -371,42 +493,39 @@ function connectSocket() {
     }
   });
 
-    socket.on('reaction_added', (data) => {
+      socket.on('reaction_added', (data) => {
     const msgEl = document.querySelector(`[data-message-id="${data.messageId}"]`);
-    if (msgEl) {
-      const container = msgEl.querySelector('.reactions-container');
-      let badge = container.querySelector(`[data-emoji="${data.emoji}"]`);
-      if (!badge) {
-        badge = document.createElement('div');
-        badge.className = 'reaction-badge';
-        badge.dataset.emoji = data.emoji;
-        badge.innerHTML = `${data.emoji} <span>0</span>`;
-        badge.onclick = async () => {
-          try { await api(`/messages/${data.messageId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji: data.emoji }) }); } catch(e) {}
-        };
-        container.appendChild(badge);
-      }
-      const countSpan = badge.querySelector('span');
-      countSpan.textContent = parseInt(countSpan.textContent) + 1;
-      if (data.userId === currentUser.id) badge.classList.add('mine');
+    if (!msgEl) return;
+    const container = msgEl.querySelector('.reactions-container');
+    if (!container) return;
+    let badge = container.querySelector(`[data-emoji="${CSS.escape(data.emoji)}"]`);
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'reaction-badge';
+      badge.dataset.emoji = data.emoji;
+      badge.innerHTML = `${toTwemoji(data.emoji)} <span>0</span>`;
+      badge.onclick = async () => {
+        try { await api(`/messages/${data.messageId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji: data.emoji }) }); } catch(e) {}
+      };
+      container.appendChild(badge);
     }
+    const countSpan = badge.querySelector('span');
+    countSpan.textContent = parseInt(countSpan.textContent) + 1;
+    if (data.userId === currentUser.id) badge.classList.add('mine');
   });
 
   socket.on('reaction_removed', (data) => {
     const msgEl = document.querySelector(`[data-message-id="${data.messageId}"]`);
-    if (msgEl) {
-      const container = msgEl.querySelector('.reactions-container');
-      let badge = container.querySelector(`[data-emoji="${data.emoji}"]`);
-      if (badge) {
-        const countSpan = badge.querySelector('span');
-        let newCount = parseInt(countSpan.textContent) - 1;
-        if (newCount <= 0) {
-          badge.remove();
-        } else {
-          countSpan.textContent = newCount;
-        }
-        if (data.userId === currentUser.id) badge.classList.remove('mine');
-      }
+    if (!msgEl) return;
+    const container = msgEl.querySelector('.reactions-container');
+    if (!container) return;
+    const badge = container.querySelector(`[data-emoji="${CSS.escape(data.emoji)}"]`);
+    if (badge) {
+      const countSpan = badge.querySelector('span');
+      const newCount = parseInt(countSpan.textContent) - 1;
+      if (newCount <= 0) badge.remove();
+      else countSpan.textContent = newCount;
+      if (data.userId === currentUser.id) badge.classList.remove('mine');
     }
   });
 
@@ -455,6 +574,8 @@ function setupHome() {
 }
 
 function renderHomeExtras() {
+  updateHomeHeader();
+
   const statsRow = document.getElementById('home-stats-row');
   if (statsRow) {
     const onlineCount = cachedFriends.filter(f => onlineFriendIds.has(f.id)).length;
@@ -482,6 +603,7 @@ function renderHomeExtras() {
     pill.innerHTML = `<span class="status-dot ${status}"></span>${labels[status] || 'Online'}`;
   }
 
+  // Amigos online
   const onlineList = document.getElementById('online-friends-list');
   const onlineCountEl = document.getElementById('online-friends-count');
   if (onlineList) {
@@ -494,13 +616,14 @@ function renderHomeExtras() {
       onlineFriends.slice(0, 8).forEach(f => {
         const li = document.createElement('li');
         li.className = 'widget-item';
-        li.innerHTML = `<img class="avatar" src="${avatarOrDefault(f.avatar)}" /><span class="widget-item-name">${escapeHtml(f.display_name)}</span>`;
+        li.innerHTML = `<img class="avatar" src="${avatarOrDefault(f.avatar)}" /><span class="online-dot-sm online"></span><span class="widget-item-name">${escapeHtml(f.display_name)}</span>`;
         li.addEventListener('click', () => { switchView('chat'); openChat(f); });
         onlineList.appendChild(li);
       });
     }
   }
 
+  // Conversas recentes
   const activityList = document.getElementById('recent-activity-list');
   if (activityList) {
     const withMessages = cachedFriends.filter(f => f.last_message_at).sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
@@ -517,6 +640,115 @@ function renderHomeExtras() {
       });
     }
   }
+
+  // ✨ NOVO: widget "Your Servers"
+  const serversList = document.getElementById('home-servers-list');
+  const serversCount = document.getElementById('home-servers-count');
+  if (serversList) {
+    if (serversCount) serversCount.textContent = cachedServers.length;
+    serversList.innerHTML = '';
+    if (cachedServers.length === 0) {
+      serversList.innerHTML = '<li class="widget-empty">Create or join a server to see it here</li>';
+    } else {
+      cachedServers.slice(0, 6).forEach(s => {
+        const li = document.createElement('li');
+        li.className = 'widget-item';
+        const initial = (s.name || 'S').charAt(0).toUpperCase();
+        const icon = s.icon
+          ? `<img class="avatar" src="${escapeHtml(s.icon)}" />`
+          : `<span class="server-mini-badge">${initial}</span>`;
+        li.innerHTML = `${icon}<span class="widget-item-name">${escapeHtml(s.name || 'Server')}</span><span class="widget-item-sub">Open</span>`;
+        li.addEventListener('click', () => switchView('servers'));
+        serversList.appendChild(li);
+      });
+    }
+  }
+}
+
+function updateHomeHeader() {
+  const greetingEl = document.getElementById('home-greeting');
+  const nameEl = document.getElementById('home-username-big');
+  const dateEl = document.getElementById('home-date');
+
+  if (greetingEl) {
+    const h = new Date().getHours();
+    let g = 'Good night';
+    if (h >= 5 && h < 12) g = 'Good morning';
+    else if (h < 18) g = 'Good afternoon';
+    else if (h < 22) g = 'Good evening';
+    greetingEl.textContent = g + ',';
+  }
+  if (nameEl && currentUser) nameEl.textContent = currentUser.display_name;
+  if (dateEl) {
+    dateEl.textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+}
+
+// ===== Settings em seções (estilo Discord) =====
+function setupSettingsNav() {
+  const btns = document.querySelectorAll('.settings-nav-btn[data-section]');
+  btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const s = btn.dataset.section;
+      btns.forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.settings-section').forEach(el => el.classList.add('hidden'));
+      const target = document.getElementById('settings-section-' + s);
+      if (target) target.classList.remove('hidden');
+    });
+  });
+
+  const goProfile = document.getElementById('go-profile-btn');
+  if (goProfile) {
+    goProfile.addEventListener('click', () => {
+      document.querySelector('.settings-nav-btn[data-section="profile"]')?.click();
+    });
+  }
+}
+
+function fillAccountCard() {
+  if (!currentUser) return;
+  const av = document.getElementById('account-avatar');
+  const bn = document.getElementById('account-banner');
+  const dn = document.getElementById('account-display-name');
+  const un = document.getElementById('account-username');
+  const se = document.getElementById('account-serial');
+  if (av) av.src = avatarOrDefault(currentUser.avatar);
+  if (dn) dn.textContent = currentUser.display_name;
+  if (un) un.textContent = '@' + currentUser.username;
+  if (se) se.textContent = currentUser.serial_id;
+  if (bn) {
+    bn.style.backgroundImage = currentUser.banner
+      ? `url('${currentUser.banner}')`
+      : 'linear-gradient(135deg, var(--accent), var(--brand-to))';
+  }
+}
+
+function setupNotificationPrefs() {
+  const toggles = [
+    { id: 'pref-msg-sound', key: 'pc_sound_messages' },
+    { id: 'pref-login-sound', key: 'pc_sound_login' },
+    { id: 'pref-notify-popup', key: 'pc_notify_popup' }
+  ];
+  toggles.forEach(({ id, key }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.checked = localStorage.getItem(key) !== 'off';
+    el.addEventListener('change', () => {
+      localStorage.setItem(key, el.checked ? 'on' : 'off');
+    });
+  });
+}
+
+// Clicar na pfp/nome do header da DM abre o perfil
+function setupChatHeaderProfile() {
+  const av = document.getElementById('chat-header-avatar');
+  const nm = document.getElementById('chat-header-name');
+  [av, nm].forEach(el => {
+    if (!el) return;
+    el.addEventListener('click', () => {
+      if (activeFriend) openProfileModal(activeFriend.id, 'friend');
+    });
+  });
 }
 
 function setupStatus() {
@@ -566,19 +798,71 @@ function renderProfile() {
   document.getElementById('profile-display-name').textContent = currentUser.display_name;
   document.getElementById('profile-username').textContent = '@' + currentUser.username;
   document.getElementById('profile-serial').textContent = currentUser.serial_id;
-  document.getElementById('profile-bio').textContent = currentUser.bio || 'No bio provided.';
-  
+  // Bio agora aceita :emojis:
+  document.getElementById('profile-bio').innerHTML = parseEmojis(currentUser.bio || 'No bio provided.');
+
   const bannerEl = document.getElementById('profile-banner-el');
   if (currentUser.banner) {
     bannerEl.style.backgroundImage = `url('${currentUser.banner}')`;
   } else {
-    bannerEl.style.backgroundImage = 'linear-gradient(135deg, var(--accent), var(--accent-hover))';
+    bannerEl.style.backgroundImage = 'linear-gradient(135deg, var(--accent), var(--brand-to))';
   }
 
   const homeUserEl = document.getElementById('home-username');
   if (homeUserEl) homeUserEl.textContent = currentUser.display_name;
 
+  fillAccountCard();
   renderHomeExtras();
+}
+
+function fillSettingsForm() {
+  document.getElementById('settings-display-name').value = currentUser.display_name || '';
+  document.getElementById('settings-bio').value = currentUser.bio || '';
+  document.getElementById('avatar-preview').src = avatarOrDefault(currentUser.avatar);
+  const bp = document.getElementById('banner-preview');
+  if (bp) {
+    bp.style.backgroundImage = currentUser.banner
+      ? `url('${currentUser.banner}')`
+      : 'linear-gradient(135deg, var(--accent), var(--brand-to))';
+  }
+  fillAccountCard();
+}
+
+async function init() {
+  setupAuthTabs();
+  setupAuthForms();
+  setupNav();
+  setupFriendsView();
+  setupUsersView();
+  setupSettingsView();
+  setupSettingsNav();          // ✨ novo
+  setupNotificationPrefs();    // ✨ novo
+  setupAppearance();
+  setupChatForm();
+  setupProfileModal();
+  setupGifSelectModal();
+  setupServersView();
+  setupHome();
+  setupScrollListeners();
+  setupChatHeaderProfile();    // ✨ novo
+  setupEmojiAutocomplete('chat-input');        // ✨ novo
+  setupEmojiAutocomplete('server-chat-input'); // ✨ novo
+
+  // Fecha pickers/autocomplete ao clicar fora
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.emoji-quick-picker.show').forEach(p => {
+      if (!p.contains(e.target)) p.classList.remove('show');
+    });
+    document.querySelectorAll('.emoji-ac:not(.hidden)').forEach(ac => {
+      if (!ac.contains(e.target)) ac.classList.add('hidden');
+    });
+  });
+
+  try {
+    const { user } = await api('/me');
+    currentUser = user;
+    enterApp();
+  } catch { showAuthScreen(); }
 }
 
 function setupFriendsView() {
@@ -837,13 +1121,6 @@ function setupSettingsView() {
   });
 }
 
-function fillSettingsForm() {
-  document.getElementById('settings-display-name').value = currentUser.display_name || '';
-  document.getElementById('settings-bio').value = currentUser.bio || '';
-  document.getElementById('avatar-preview').src = avatarOrDefault(currentUser.avatar);
-  document.getElementById('banner-preview').style.cssText = `background-image: url('${currentUser.banner}')`;
-}
-
 function setupAppearance() {
   const savedTheme = localStorage.getItem('pc_theme') || 'dark';
   const savedAccent = localStorage.getItem('pc_accent');
@@ -983,14 +1260,12 @@ async function openChat(friend) {
 function appendMessage(message, prepend = false) {
   if (!activeFriend) return;
   const messagesEl = document.getElementById('chat-messages');
-  
+
   let wrapper = messagesEl.querySelector(`[data-message-id="${message.id}"]`);
   if (!wrapper) {
     wrapper = document.createElement('div');
     wrapper.className = 'message-wrapper ' + (message.sender_id === currentUser.id ? 'mine' : 'theirs');
     wrapper.dataset.messageId = message.id;
-    if (prepend) messagesEl.prepend(wrapper);
-    else messagesEl.appendChild(wrapper);
   } else {
     wrapper.innerHTML = '';
   }
@@ -1013,78 +1288,34 @@ function appendMessage(message, prepend = false) {
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble ' + (message.sender_id === currentUser.id ? 'mine' : 'theirs');
-  
+
   if (message.deleted_at) {
     bubble.classList.add('deleted-msg');
     bubble.textContent = 'Mensagem apagada';
     wrapper.dataset.content = '';
   } else if (message.content.startsWith('img:')) {
     const url = message.content.replace('img:', '');
-    bubble.innerHTML = `<img src="${url}" style="max-width:100%; border-radius:8px; display:block;" />`;
-    wrapper.dataset.content = "GIF";
+    bubble.innerHTML = `<img src="${url}" class="msg-gif" />`;
+    wrapper.dataset.content = 'GIF';
   } else {
-    bubble.textContent = message.content;
+    // ✨ Shortcodes :emoji: + Twemoji aqui
+    bubble.innerHTML = parseEmojis(message.content);
     wrapper.dataset.content = message.content;
   }
   wrapper.appendChild(bubble);
 
   if (!message.deleted_at) {
-    const actions = document.createElement('div');
-    actions.className = 'message-actions';
+    // Picker de reação + barra de ações (reação JUNTO de reply/delete)
+    wrapper.appendChild(buildEmojiPicker(message));
+    wrapper.appendChild(buildMessageActions(message, 'dm', wrapper));
 
-    const reactBtn = document.createElement('button');
-    reactBtn.innerHTML = '😀';
-    reactBtn.onclick = (e) => {
-      e.stopPropagation();
-      const picker = wrapper.querySelector('.emoji-quick-picker');
-      if (picker) picker.classList.toggle('show');
-    };
-    actions.appendChild(reactBtn);
-
-    const replyBtn = document.createElement('button');
-    replyBtn.innerHTML = '↩';
-    replyBtn.title = 'Reply';
-    replyBtn.onclick = () => setReplyDM(message);
-    actions.appendChild(replyBtn);
-
-    const delBtn = document.createElement('button');
-    delBtn.className = 'delete-btn';
-    delBtn.innerHTML = '🗑';
-    delBtn.title = 'Delete';
-    delBtn.onclick = async () => {
-      showConfirm({
-        title: 'Delete Message',
-        content: 'Are you sure you want to delete this message?',
-        confirmText: 'Delete',
-        onConfirm: async () => {
-          try { await api(`/messages/${message.id}`, { method: 'DELETE' }); } catch(e) { showToast(e.message, 'error'); }
-        }
-      });
-    };
-    actions.appendChild(delBtn);
-
-    const emojiPicker = document.createElement('div');
-    emojiPicker.className = 'emoji-quick-picker';
-    ['👍', '❤️', '😂', '😮', '😢', '🙏'].forEach(em => {
-      const span = document.createElement('span');
-      span.textContent = em;
-      span.onclick = async () => {
-        try { await api(`/messages/${message.id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji: em }) }); } catch(err) {}
-        emojiPicker.classList.remove('show');
-      };
-      emojiPicker.appendChild(span);
-    });
-
+    // Reações: canto esquerdo inferior, várias simultâneas
     const reactionsContainer = document.createElement('div');
     reactionsContainer.className = 'reactions-container';
     if (message.reactions) renderReactions(reactionsContainer, message.reactions, message.id);
-
-    wrapper.appendChild(reactBtn);
-    wrapper.appendChild(actions);
-    wrapper.appendChild(emojiPicker);
     wrapper.appendChild(reactionsContainer);
   }
-  
+
   if (prepend) {
     messagesEl.prepend(wrapper);
   } else {
@@ -1093,23 +1324,94 @@ function appendMessage(message, prepend = false) {
   }
 }
 
+// Barra de ações: Reagir + Reply + Delete (mesmo lugar, como o Discord)
+function buildMessageActions(message, type, wrapper) {
+  const actions = document.createElement('div');
+  actions.className = 'message-actions';
+
+  // Botão de reação (agora junto dos outros)
+  const reactBtn = document.createElement('button');
+  reactBtn.title = 'Add Reaction';
+  reactBtn.innerHTML = toTwemoji('🙂');
+  reactBtn.onclick = (e) => {
+    e.stopPropagation();
+    const picker = wrapper.querySelector('.emoji-quick-picker');
+    if (picker) {
+      const isOpen = picker.classList.contains('show');
+      closeAllEmojiPickers();
+      if (!isOpen) picker.classList.add('show');
+    }
+  };
+  actions.appendChild(reactBtn);
+
+  // Reply
+  const replyBtn = document.createElement('button');
+  replyBtn.innerHTML = '↩';
+  replyBtn.title = 'Reply';
+  replyBtn.onclick = () => { if (type === 'dm') setReplyDM(message); else setReplyServer(message); };
+  actions.appendChild(replyBtn);
+
+  // Delete
+  const delBtn = document.createElement('button');
+  delBtn.className = 'delete-btn';
+  delBtn.innerHTML = '🗑';
+  delBtn.title = 'Delete';
+  delBtn.onclick = () => {
+    showConfirm({
+      title: 'Delete Message',
+      content: 'Are you sure you want to delete this message?',
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        try {
+          if (type === 'dm') {
+            await api(`/messages/${message.id}`, { method: 'DELETE' });
+          } else {
+            // Ajuste a rota se o seu backend for diferente
+            await api(`/servers/${activeServer.id}/channels/${activeChannel.id}/messages/${message.id}`, { method: 'DELETE' });
+          }
+        } catch(e) { showToast(e.message, 'error'); }
+      }
+    });
+  };
+  actions.appendChild(delBtn);
+
+  return actions;
+}
+
+// Picker de reação com Twemoji
+function buildEmojiPicker(message) {
+  const picker = document.createElement('div');
+  picker.className = 'emoji-quick-picker';
+  QUICK_EMOJIS.forEach(em => {
+    const span = document.createElement('span');
+    span.innerHTML = toTwemoji(em);
+    span.title = em;
+    span.onclick = async (e) => {
+      e.stopPropagation();
+      picker.classList.remove('show');
+      try {
+        await api(`/messages/${message.id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji: em }) });
+      } catch(err) {}
+    };
+    picker.appendChild(span);
+  });
+  return picker;
+}
+
 function renderReactions(container, reactions, messageId) {
   container.innerHTML = '';
-  const grouped = {};
-  
   Object.entries(reactions).forEach(([emoji, users]) => {
-    grouped[emoji] = users;
-  });
-
-  Object.entries(grouped).forEach(([emoji, users]) => {
+    if (!users || users.length === 0) return;
     const isMine = users.some(u => u.id === currentUser.id);
     const badge = document.createElement('div');
     badge.className = 'reaction-badge' + (isMine ? ' mine' : '');
-    badge.innerHTML = `${emoji} <span>${users.length}</span>`;
+    badge.dataset.emoji = emoji;
+    badge.innerHTML = `${toTwemoji(emoji)} <span>${users.length}</span>`;
+    badge.title = users.map(u => u.display_name || u.username).join(', ');
     badge.onclick = async () => {
       try {
         await api(`/messages/${messageId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) });
-      } catch(err) { console.error(err); }
+      } catch(err) {}
     };
     container.appendChild(badge);
   });
@@ -1303,7 +1605,7 @@ async function openProfileModal(userId, relation, requestId) {
     document.getElementById('modal-display-name').textContent = user.display_name;
     document.getElementById('modal-username').textContent = '@' + user.username;
     document.getElementById('modal-serial').textContent = user.serial_id;
-    document.getElementById('modal-bio').textContent = user.bio || '';
+    document.getElementById('modal-bio').innerHTML = parseEmojis(user.bio || 'No bio provided.');
     
     const actionsEl = document.getElementById('modal-actions');
     actionsEl.innerHTML = '';
@@ -1569,7 +1871,7 @@ function appendServerMessage(message, prepend = false) {
     contentEl.textContent = 'Mensagem apagada';
     div.dataset.content = '';
   } else {
-    contentEl.textContent = message.content;
+    contentEl.content.innerHTML = parseEmojis(message.content);
     div.dataset.content = message.content;
   }
   body.appendChild(contentEl);

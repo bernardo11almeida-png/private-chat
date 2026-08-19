@@ -75,12 +75,13 @@
     </aside>
 
     <main class="main-area">
-           <!-- HOME -->
+      <!-- ===== HOME ===== -->
       <section id="view-home" class="view">
         <div class="home-container">
           <div class="home-header">
-            <h1 class="brand-name">SYNTO</h1>
-            <p class="muted">Welcome back, <strong id="home-username" style="color: var(--text)"></strong></p>
+            <p class="home-greeting-label" id="home-greeting">Welcome back,</p>
+            <h1 class="brand-name themed-name" id="home-username-big"></h1>
+            <p class="home-date muted small" id="home-date"></p>
           </div>
 
           <div class="home-stats-row" id="home-stats-row"></div>
@@ -91,18 +92,22 @@
               <div class="profile-card-body">
                 <img id="profile-avatar" class="avatar avatar-lg avatar-overlap" src="" alt="avatar" />
                 <span class="status-pill" id="profile-status-pill"><span class="status-dot online"></span>Online</span>
-                <h2 id="profile-display-name"></h2>
+                <h2 id="profile-display-name" class="themed-name"></h2>
                 <p id="profile-username" class="muted"></p>
                 <p id="profile-serial" class="serial-id"></p>
                 <div class="bio-box">
                   <h3 class="field-label" style="margin-bottom: 4px;">About Me</h3>
                   <p id="profile-bio" class="bio"></p>
                 </div>
+                <button class="quick-action-btn" data-action="settings" style="margin-top:16px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Edit Profile
+                </button>
               </div>
             </div>
 
             <div class="home-side">
-              <div class="home-widget" id="home-online-widget">
+              <div class="home-widget">
                 <div class="home-widget-header">
                   <h2>Online Friends</h2>
                   <span class="widget-count" id="online-friends-count">0</span>
@@ -110,11 +115,19 @@
                 <ul class="widget-list" id="online-friends-list"></ul>
               </div>
 
-              <div class="home-widget" id="home-activity-widget">
+              <div class="home-widget">
                 <div class="home-widget-header">
                   <h2>Recent Conversations</h2>
                 </div>
                 <ul class="widget-list" id="recent-activity-list"></ul>
+              </div>
+
+              <div class="home-widget">
+                <div class="home-widget-header">
+                  <h2>Your Servers</h2>
+                  <span class="widget-count" id="home-servers-count">0</span>
+                </div>
+                <ul class="widget-list" id="home-servers-list"></ul>
               </div>
 
               <div class="home-quick-actions">
@@ -141,14 +154,14 @@
         </div>
       </section>
 
-      <!-- FRIENDS -->
+      <!-- ===== FRIENDS ===== -->
       <section id="view-friends" class="view hidden">
         <div class="panel">
           <h2>Add Friend</h2>
-            <form id="add-friend-form" class="add-friend-row">
-              <input type="text" id="friend-serial-input" placeholder="Enter Serial ID... (#000000000)" />
-              <button type="submit" id="send-friend-request-btn">Send Request</button>
-            </form>
+          <form id="add-friend-form" class="add-friend-row">
+            <input type="text" id="friend-serial-input" placeholder="Enter Serial ID... (#000000000)" />
+            <button type="submit" id="send-friend-request-btn">Send Request</button>
+          </form>
           <p class="form-error" id="add-friend-error"></p>
           <h3>Pending Requests</h3>
           <ul id="friend-requests-list" class="simple-list"></ul>
@@ -159,7 +172,7 @@
         </div>
       </section>
 
-      <!-- USERS -->
+      <!-- ===== USERS ===== -->
       <section id="view-users" class="view hidden">
         <div class="panel">
           <h2>Search User</h2>
@@ -171,7 +184,7 @@
         </div>
       </section>
 
-      <!-- SERVERS -->
+      <!-- ===== SERVERS ===== -->
       <section id="view-servers" class="view hidden">
         <div class="servers-layout">
           <aside class="server-directory">
@@ -247,75 +260,148 @@
           </div>
         </div>
       </section>
-      
-      <!-- SETTINGS -->
+
+      <!-- ===== SETTINGS (estilo Discord, com sidebar de seções) ===== -->
       <section id="view-settings" class="view hidden">
-        <div class="panel panel-wide">
-          <h2>Edit Profile</h2>
-          <div class="upload-row">
-            <div class="upload-box">
-              <label class="field-label">Banner</label>
-              <div class="banner-preview" id="banner-preview"></div>
-              <div class="upload-actions">
-                <label class="btn-secondary file-btn">Change Banner<input type="file" id="banner-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
-                <button type="button" id="banner-gif-btn" class="btn-secondary">Use GIF</button>
-                <button type="button" id="remove-banner-btn" class="btn-secondary">Remove</button>
+        <div class="settings-layout">
+          <nav class="settings-nav">
+            <p class="settings-nav-label">User Settings</p>
+            <button class="settings-nav-btn active" data-section="account">My Account</button>
+            <button class="settings-nav-btn" data-section="profile">Profile</button>
+            <button class="settings-nav-btn" data-section="appearance">Appearance</button>
+            <button class="settings-nav-btn" data-section="notifications">Notifications</button>
+            <div class="settings-nav-divider"></div>
+            <button class="settings-nav-btn settings-logout" id="logout-btn">Log Out</button>
+          </nav>
+
+          <div class="settings-content">
+            <!-- MY ACCOUNT -->
+            <div id="settings-section-account" class="settings-section">
+              <h2 class="settings-title">My Account</h2>
+              <p class="settings-desc">Your account details and presence status.</p>
+
+              <div class="account-card">
+                <div class="account-banner" id="account-banner"></div>
+                <div class="account-body">
+                  <img id="account-avatar" class="avatar avatar-lg avatar-overlap" src="" alt="avatar" />
+                  <div class="account-info">
+                    <h3 id="account-display-name" class="themed-name" style="margin:0; font-size:20px;"></h3>
+                    <p id="account-username" class="muted small" style="margin:2px 0;"></p>
+                    <p id="account-serial" class="serial-id" style="margin:2px 0;"></p>
+                  </div>
+                  <button type="button" class="btn-secondary" id="go-profile-btn">Edit User Profile</button>
+                </div>
+              </div>
+
+              <h3 class="settings-subtitle">Status</h3>
+              <div class="status-grid" id="status-grid">
+                <button type="button" class="status-btn" data-status="online">
+                  <span class="status-dot online"></span> Online
+                </button>
+                <button type="button" class="status-btn" data-status="away">
+                  <span class="status-dot away"></span> Away
+                </button>
+                <button type="button" class="status-btn" data-status="busy">
+                  <span class="status-dot busy"></span> Do Not Disturb
+                </button>
+                <button type="button" class="status-btn" data-status="invisible">
+                  <span class="status-dot invisible"></span> Invisible
+                </button>
               </div>
             </div>
-            <div class="upload-box">
-              <label class="field-label">Profile Picture</label>
-              <img id="avatar-preview" class="avatar avatar-lg" src="" alt="avatar" />
-              <div class="upload-actions">
-                <label class="btn-secondary file-btn">Upload Photo<input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
-                <button type="button" id="avatar-gif-btn" class="btn-secondary">Use GIF</button>
-                <button type="button" id="remove-avatar-btn" class="btn-secondary">Remove</button>
+
+            <!-- PROFILE -->
+            <div id="settings-section-profile" class="settings-section hidden">
+              <h2 class="settings-title">Profile</h2>
+              <p class="settings-desc">Customize how you appear across Synto.</p>
+
+              <div class="upload-row">
+                <div class="upload-box">
+                  <label class="field-label">Banner</label>
+                  <div class="banner-preview" id="banner-preview"></div>
+                  <div class="upload-actions">
+                    <label class="btn-secondary file-btn">Change Banner<input type="file" id="banner-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
+                    <button type="button" id="banner-gif-btn" class="btn-secondary">Use GIF</button>
+                    <button type="button" id="remove-banner-btn" class="btn-secondary">Remove</button>
+                  </div>
+                </div>
+                <div class="upload-box">
+                  <label class="field-label">Profile Picture</label>
+                  <img id="avatar-preview" class="avatar avatar-lg" src="" alt="avatar" />
+                  <div class="upload-actions">
+                    <label class="btn-secondary file-btn">Upload Photo<input type="file" id="avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden /></label>
+                    <button type="button" id="avatar-gif-btn" class="btn-secondary">Use GIF</button>
+                    <button type="button" id="remove-avatar-btn" class="btn-secondary">Remove</button>
+                  </div>
+                </div>
+              </div>
+              <p class="form-error" id="upload-error"></p>
+
+              <form id="settings-form">
+                <label class="field-label">Display Name</label>
+                <input type="text" id="settings-display-name" />
+                <label class="field-label">Bio</label>
+                <textarea id="settings-bio" rows="3" placeholder="Tell something about you... use :emojis: like :heart:"></textarea>
+                <button type="submit">Save Changes</button>
+                <p class="form-success" id="settings-success"></p>
+              </form>
+            </div>
+
+            <!-- APPEARANCE -->
+            <div id="settings-section-appearance" class="settings-section hidden">
+              <h2 class="settings-title">Appearance</h2>
+              <p class="settings-desc">Choose a theme and personalize your accent color.</p>
+
+              <label class="field-label">Theme</label>
+              <div class="theme-grid" id="theme-grid">
+                <button type="button" class="theme-swatch" data-theme="dark"><span class="swatch-preview swatch-dark"></span> Dark</button>
+                <button type="button" class="theme-swatch" data-theme="light"><span class="swatch-preview swatch-light"></span> Light</button>
+                <button type="button" class="theme-swatch" data-theme="midnight"><span class="swatch-preview swatch-midnight"></span> Midnight</button>
+                <button type="button" class="theme-swatch" data-theme="forest"><span class="swatch-preview swatch-forest"></span> Forest</button>
+                <button type="button" class="theme-swatch" data-theme="coffee"><span class="swatch-preview swatch-coffee"></span> Coffee</button>
+              </div>
+
+              <label class="field-label">Accent Color</label>
+              <div class="accent-row">
+                <input type="color" id="accent-input" value="#5865f2" />
+                <button type="button" id="accent-reset-btn" class="btn-secondary">Reset Default</button>
+              </div>
+            </div>
+
+            <!-- NOTIFICATIONS -->
+            <div id="settings-section-notifications" class="settings-section hidden">
+              <h2 class="settings-title">Notifications</h2>
+              <p class="settings-desc">Control sounds and popup notifications.</p>
+
+              <div class="pref-row">
+                <div class="pref-text">
+                  <strong>Message Sounds</strong>
+                  <p class="muted small">Play a sound when sending and receiving messages.</p>
+                </div>
+                <label class="toggle"><input type="checkbox" id="pref-msg-sound" checked /><span class="toggle-slider"></span></label>
+              </div>
+
+              <div class="pref-row">
+                <div class="pref-text">
+                  <strong>Login Sound</strong>
+                  <p class="muted small">Play the welcome sound when you log in.</p>
+                </div>
+                <label class="toggle"><input type="checkbox" id="pref-login-sound" checked /><span class="toggle-slider"></span></label>
+              </div>
+
+              <div class="pref-row">
+                <div class="pref-text">
+                  <strong>Popup Notifications</strong>
+                  <p class="muted small">Show a popup when you receive a new message.</p>
+                </div>
+                <label class="toggle"><input type="checkbox" id="pref-notify-popup" checked /><span class="toggle-slider"></span></label>
               </div>
             </div>
           </div>
-          <p class="form-error" id="upload-error"></p>
-          <form id="settings-form">
-            <label class="field-label">Display Name</label>
-            <input type="text" id="settings-display-name" />
-            <label class="field-label">Bio</label>
-            <textarea id="settings-bio" rows="3"></textarea>
-            <button type="submit">Save Changes</button>
-            <p class="form-success" id="settings-success"></p>
-          </form>
-          <h2 class="section-title">Appearance</h2>
-          <h2 class="section-title">Status</h2>
-          <label class="field-label">Your Status</label>
-          <div class="status-grid" id="status-grid">
-            <button type="button" class="status-btn" data-status="online">
-              <span class="status-dot online"></span> Online
-            </button>
-            <button type="button" class="status-btn" data-status="away">
-              <span class="status-dot away"></span> Away
-            </button>
-            <button type="button" class="status-btn" data-status="busy">
-              <span class="status-dot busy"></span> Do Not Disturb
-            </button>
-            <button type="button" class="status-btn" data-status="invisible">
-              <span class="status-dot invisible"></span> Invisible
-            </button>
-          </div>
-          <label class="field-label">Theme</label>
-            <div class="theme-grid" id="theme-grid">
-              <button type="button" class="theme-swatch" data-theme="dark"><span class="swatch-preview swatch-dark"></span> Dark</button>
-              <button type="button" class="theme-swatch" data-theme="light"><span class="swatch-preview swatch-light"></span> Light</button>
-              <button type="button" class="theme-swatch" data-theme="midnight"><span class="swatch-preview swatch-midnight"></span> Midnight</button>
-              <button type="button" class="theme-swatch" data-theme="forest"><span class="swatch-preview swatch-forest"></span> Forest</button>
-              <button type="button" class="theme-swatch" data-theme="coffee"><span class="swatch-preview swatch-coffee"></span> Coffee</button>
-            </div>
-          <label class="field-label">Accent Color</label>
-          <div class="accent-row">
-            <input type="color" id="accent-input" value="#5865f2" />
-            <button type="button" id="accent-reset-btn" class="btn-secondary">Reset Default</button>
-          </div>
-          <button id="logout-btn" class="logout-btn">Log Out</button>
         </div>
       </section>
 
-      <!-- CHAT -->
+      <!-- ===== CHAT ===== -->
       <section id="view-chat" class="view hidden">
         <div class="chat-layout">
           <div class="chat-friend-list">
@@ -326,15 +412,14 @@
             <div id="chat-empty" class="chat-empty">Select a friend to chat</div>
             <div id="chat-active" class="chat-active hidden">
               <div class="chat-header">
-                <img id="chat-header-avatar" class="avatar" src="" alt="avatar" />
+                <img id="chat-header-avatar" class="avatar chat-header-avatar-clickable" src="" alt="avatar" title="View profile" />
                 <div>
-                  <div id="chat-header-name"></div>
+                  <div id="chat-header-name" class="chat-header-name-clickable" title="View profile"></div>
                   <div id="chat-header-status" class="muted small">● Offline</div>
                 </div>
               </div>
               <div id="chat-messages" class="chat-messages"></div>
-              
-              <!-- Popup de GIFs -->
+
               <div id="gif-picker" class="gif-picker hidden">
                 <div class="gif-tabs">
                   <button class="gif-tab-btn active" data-gif-tab="search">Search</button>
@@ -354,7 +439,7 @@
 
               <form id="chat-form" class="chat-input-row">
                 <button type="button" id="open-gif-btn" class="btn-secondary">GIF</button>
-                <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" />
+                <input type="text" id="chat-input" placeholder="Type a message... try :fire:" autocomplete="off" />
                 <button type="submit">➤</button>
               </form>
             </div>
@@ -372,7 +457,7 @@
       <div class="profile-banner" id="modal-banner"></div>
       <div class="profile-card-body">
         <img id="modal-avatar" class="avatar avatar-lg avatar-overlap" src="" alt="avatar" />
-        <h2 id="modal-display-name"></h2>
+        <h2 id="modal-display-name" class="themed-name"></h2>
         <p id="modal-username" class="muted"></p>
         <p id="modal-serial" class="serial-id"></p>
         <p id="modal-bio" class="bio"></p>
@@ -411,10 +496,10 @@
         <button id="create-role-btn">Create Role</button>
       </div>
       <ul id="server-roles-list" class="simple-list"></ul>
-      
+
       <h3>Members & Roles Assignment</h3>
       <ul id="server-members-list" class="simple-list"></ul>
-      
+
       <h3>Channel Permissions</h3>
       <div style="margin-bottom: 10px;">
         <select id="perm-channel-select" style="width: 100%; padding: 10px; background: var(--bg-elevated-2); border: 1px solid var(--border); color: var(--text);"></select>
@@ -437,10 +522,11 @@
     </div>
   </div>
 
-  <!-- ===== Toast Container (Notificações rápidas) ===== -->
+  <!-- ===== Notificações ===== -->
+  <div id="notification-container" class="notification-container"></div>
   <div id="toast-container" class="toast-container"></div>
 
-  <!-- ===== Modal Customizado (Para Confirmar/Editar) ===== -->
+  <!-- ===== Modal Customizado ===== -->
   <div id="custom-modal" class="modal-backdrop hidden">
     <div class="custom-modal-card">
       <h2 id="custom-modal-title">Title</h2>
@@ -450,6 +536,8 @@
     </div>
   </div>
 
+  <!-- Twemoji: o mesmo estilo de emoji do Discord -->
+  <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 </body>
