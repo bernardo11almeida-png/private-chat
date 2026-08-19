@@ -44,13 +44,12 @@ const loginLimiter = rateLimit({
 
 // ---------- Rate limiting por USUÁRIO (Account-based) ----------
 const messageLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minuto
-  limit: (req, res) => 30, // 30 requisições por minuto
+  windowMs: 10 * 1000, // Janela de 10 segundos
+  limit: (req, res) => 8, // Máximo de 8 mensagens a cada 10 segundos
   standardHeaders: true,
   legacyHeaders: false,
-  // Usa o ID do usuário logado como chave. Se não estiver logado, usa o IP.
   keyGenerator: (req, res) => req.session.userId || req.ip,
-  message: { error: 'You are sending messages too fast. Please slow down.' }
+  message: { error: 'You are sending messages too fast. Please wait a moment.' }
 });
 
 // ---------- Uploads (memória -> Supabase Storage) ----------

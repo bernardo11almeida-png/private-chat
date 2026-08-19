@@ -1015,7 +1015,12 @@ function appendMessage(message, prepend = false) {
     wrapper.appendChild(reactionsContainer);
   }
   
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (prepend) {
+    messagesEl.prepend(wrapper);
+  } else {
+    messagesEl.appendChild(wrapper);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
 }
 
 function renderReactions(container, reactions, messageId) {
@@ -1047,12 +1052,12 @@ let isSendingServer = false;
 function setupChatForm() {
   document.getElementById('chat-form').addEventListener('submit', async (e) => {
     e.preventDefault(); 
-    if (!activeFriend || isSendingDM) return; // Trava se já estiver enviando
+    if (!activeFriend || isSendingDM) return;
     
     const input = document.getElementById('chat-input');
     if (!input.value.trim()) return;
     
-    isSendingDM = true; // Liga a trava
+    isSendingDM = true;
     const btn = e.target.querySelector('button[type="submit"]');
     if (btn) btn.disabled = true;
 
@@ -1063,9 +1068,11 @@ function setupChatForm() {
       input.value = '';
       cancelReplyDM();
     } catch (err) { 
-      showToast(err.message, 'error'); 
+      showToast(err.message, 'error'); // Mostra o aviso de "slow down"
+      // Se for erro de rate limit, mantém a mensagem na caixa para o usuário não perder o que digitou
+      if (!err.message.includes('fast')) input.value = input.value;
     } finally {
-      isSendingDM = false; // Destrava
+      isSendingDM = false;
       if (btn) btn.disabled = false;
       input.focus();
     }
@@ -1096,12 +1103,12 @@ function setupChatForm() {
 
 async function sendServerMessage(event) {
   event.preventDefault();
-  if (!activeServer || !activeChannel || isSendingServer) return; // Trava se já estiver enviando
+  if (!activeServer || !activeChannel || isSendingServer) return;
   
   const input = document.getElementById('server-chat-input');
   if (!input.value.trim()) return;
   
-  isSendingServer = true; // Liga a trava
+  isSendingServer = true;
   const btn = event.target.querySelector('button[type="submit"]');
   if (btn) btn.disabled = true;
 
@@ -1113,9 +1120,9 @@ async function sendServerMessage(event) {
     input.value = '';
     cancelReplyServer();
   } catch (err) { 
-    showToast(err.message, 'error'); 
+    showToast(err.message, 'error'); // Mostra o aviso
   } finally {
-    isSendingServer = false; // Destrava
+    isSendingServer = false;
     if (btn) btn.disabled = false;
     input.focus();
   }
@@ -1537,7 +1544,13 @@ function appendServerMessage(message, prepend = false) {
 
   div.appendChild(avatar);
   div.appendChild(body);
-  msgEl.scrollTop = msgEl.scrollHeight;
+  
+  if (prepend) {
+    msgEl.prepend(div);
+  } else {
+    msgEl.appendChild(div);
+    msgEl.scrollTop = msgEl.scrollHeight;
+  }
 }
 
 async function copyServerInvite() {
