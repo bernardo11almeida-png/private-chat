@@ -880,6 +880,8 @@ async function init() {
   setupEmojiAutocomplete('server-chat-input'); // ✨ novo
   setupNotificationPrefs();
   setupPreferences();
+  setupChatForm();
+  setupFileUpload();
 
   // Fecha pickers/autocomplete ao clicar fora
   document.addEventListener('click', (e) => {
@@ -1397,15 +1399,17 @@ function appendMessage(message, prepend = false) {
     bubble.classList.add('deleted-msg');
     bubble.textContent = 'Mensagem apagada';
     wrapper.dataset.content = '';
-  } else if (message.content.startsWith('img:')) {
-    const url = message.content.replace('img:', '');
-    bubble.innerHTML = `<img src="${url}" class="msg-gif" />`;
-    wrapper.dataset.content = 'GIF';
-  } else {
-    // ✨ Shortcodes :emoji: + Twemoji aqui
-    bubble.innerHTML = parseEmojis(message.content);
-    wrapper.dataset.content = message.content;
-  }
+    } else if (message.content.startsWith('img:')) {
+        const url = message.content.replace('img:', '');
+        bubble.innerHTML = `<img src="${url}" class="msg-gif" />`;
+        wrapper.dataset.content = 'GIF';
+    } else if (message.content.startsWith('file:')) {
+        bubble.innerHTML = renderFileMessage(message.content);
+        wrapper.dataset.content = 'Arquivo';
+    } else {
+        bubble.innerHTML = parseEmojis(message.content);
+        wrapper.dataset.content = message.content;
+    }
   wrapper.appendChild(bubble);
 
   if (!message.deleted_at) {
@@ -1687,6 +1691,81 @@ async function loadGifTab(tab, query = 'hello') {
   } catch (err) {
     grid.innerHTML = `<p class="form-error">${err.message}</p>`;
   }
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return n.toFixed(n < 10 && i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
+function renderFileMessage(raw) {
+  let meta;
+  try { meta = JSON.parse(raw.replace('file:', '')); } catch { return 'Arquivo indisponivel'; }
+  const type = meta.type || '';
+  if (type.startsWith('image/')) {
+    return `<a href="${meta.url}" target="_blank" rel="noopener"><img src="${meta.url}" class="msg-gif" /></a>`;
+  }
+  if (type.startsWith('video/')) {
+    return `<video src="${meta.url}" class="msg-video" controls></video>`;
+  }
+  const ext = (meta.name || '').split('.').pop().toUpperCase().slice(0, 4);
+  return `<a href="${meta.url}" target="_blank" rel="noopener" class="msg-file-card">
+    <span class="msg-file-icon">${ext || '?'}</span>
+    <div class="msg-file-info">
+      <div class="msg-file-name">${escapeHtml(meta.name || 'arquivo')}</div>
+      <div class="msg-file-size">${formatFileSize(meta.size)}</div>
+    </div>
+  </a>`;
+}
+
+async function uploadAndSendFile(file) {
+  if (!activeFriend) return;
+  const bar = document.getElementById('file-upload-bar');
+  const nameEl = document.getElementById('file-upload-name');
+  bar.classList.remove('hidden');
+  nameEl.textContent = file.name || 'arquivo';
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const meta = await api('/upload/message-file', { method: 'POST', body: formData });
+    const content = 'file:' + JSON.stringify({ url: meta.url, name: meta.name, type: meta.type, size: meta.size });
+    const { message } = await api('/messages', { method: 'POST', body: JSON.stringify({ receiver_id: activeFriend.id, content, reply_to: replyDM?.id }) });
+    appendMessage(message);
+    playSound('send');
+    cancelReplyDM();
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    bar.classList.add('hidden');
+  }
+}
+
+function setupFileUpload() {
+  const btn = document.getElementById('open-file-btn');
+  const input = document.getElementById('file-input-dm');
+  btn.addEventListener('click', () => input.click());
+
+  input.addEventListener('change', async () => {
+    const files = Array.from(input.files);
+    for (const file of files) {
+      await uploadAndSendFile(file);
+    }
+    input.value = '';
+  });
+
+  document.getElementById('chat-input').addEventListener('paste', async (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const fileItem = items.find(it => it.kind === 'file');
+    if (!fileItem) return;
+    e.preventDefault();
+    const file = fileItem.getAsFile();
+    if (file) await uploadAndSendFile(file);
+  });
 }
 
 function setupProfileModal() {

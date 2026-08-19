@@ -86,6 +86,20 @@ async function deleteOldUpload(url) {
   } catch (err) { /* ignora */ }
 }
 
+const BLOCKED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.sh', '.msi', '.js', '.jar', '.com', '.scr', '.vbs', '.ps1'];
+
+const uploadAttachment = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (BLOCKED_EXTENSIONS.includes(ext)) {
+      return cb(new Error('Tipo de arquivo nao permitido'));
+    }
+    cb(null, true);
+  },
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
+
 // ---------- Helpers ----------
 function publicUser(row) {
   if (!row) return null;
@@ -316,6 +330,26 @@ app.post('/api/upload/banner', requireAuth, (req, res) => {
       const { data: updated } = await supabase.from('users').select('*').eq('id', req.session.userId).maybeSingle();
       res.json({ user: publicUser(updated) });
     } catch (e) { res.status(500).json({ error: 'Erro no upload' }); }
+  });
+});
+
+app.post('/api/upload/message-file', requireAuth, messageLimiter, (req, res) => {
+  uploadAttachment.single('file')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    try {
+      const ext = path.extname(req.file.originalname) || '';
+      const fileName = `${req.session.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+      const publicUrl = await uploadToSupabase('attachments', req.file.buffer, fileName, req.file.mimetype);
+      res.json({
+        url: publicUrl,
+        name: req.file.originalname,
+        type: req.file.mimetype,
+        size: req.file.size
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'Erro no upload do arquivo' });
+    }
   });
 });
 

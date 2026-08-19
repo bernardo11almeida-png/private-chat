@@ -457,7 +457,18 @@
                 <button type="button" id="cancel-reply-btn-dm" class="btn-secondary" style="padding: 4px 8px;">✖</button>
               </div>
 
+              <div id="file-upload-bar" class="reply-context hidden">
+                <div>
+                  <small>Enviando arquivo...</small>
+                  <div id="file-upload-name" class="muted small"></div>
+                </div>
+              </div>
+              
               <form id="chat-form" class="chat-input-row">
+                <button type="button" id="open-file-btn" class="btn-secondary" title="Enviar arquivo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+                <input type="file" id="file-input-dm" hidden multiple />
                 <button type="button" id="open-gif-btn" class="btn-secondary">GIF</button>
                 <input type="text" id="chat-input" placeholder="Type a message... try :fire:" autocomplete="off" />
                 <button type="submit">➤</button>
