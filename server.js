@@ -568,7 +568,12 @@ app.post('/api/messages', requireAuth, messageLimiter, async (req, res) => {
     return res.status(500).json({ error: 'Erro interno ao enviar mensagem' });
   }
 
+  // Emissão para o destinatário
   io.to('user:' + receiver_id).emit('new_message', message);
+  
+  // NOVO: Também emita para o remetente para garantir que a mensagem apareça
+  io.to('user:' + sender_id).emit('new_message', message);
+  
   res.json({ message });
 });
 
@@ -833,6 +838,7 @@ app.post('/api/servers/:id/channels/:channelId/messages', requireAuth, messageLi
     return res.status(500).json({ error: 'Erro interno' });
   }
   
+  // O evento já é emitido para toda a sala do servidor, então isso deve funcionar
   io.to('server:' + serverId).emit('new_server_message', message);
   res.json({ message });
 });

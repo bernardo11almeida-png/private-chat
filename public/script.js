@@ -153,6 +153,47 @@ function setupEmojiAutocomplete(inputId) {
   });
 }
 
+// Adicione após a definição da função api()
+const apiCache = new Map();
+const CACHE_TTL = 5000; // 5 segundos
+
+async function cachedApi(path, options = {}) {
+  // Não cachear requisições POST, PUT, DELETE
+  if (options.method && options.method !== 'GET') {
+    return api(path, options);
+  }
+  
+  const cacheKey = path + JSON.stringify(options);
+  const cached = apiCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  
+  const result = await api(path, options);
+  apiCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  return result;
+}
+
+async function sendMessageWithRetry(url, body, maxRetries = 3) {
+  let lastError = null;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await api(url, {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+    } catch (error) {
+      lastError = error;
+      console.log(`Tentativa ${i + 1} falhou, tentando novamente...`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+    }
+  }
+  
+  throw lastError;
+}
+
 // ================== AUDIO & NOTIFICATIONS ==================
 let audioCtx = null;
 
