@@ -2097,3 +2097,79 @@ body.compact-mode .reactions-container:not(:empty) { margin-top: 1px; margin-bot
   outline: 2px dashed var(--accent);
   outline-offset: -4px;
 }
+
+/* ===== FIX: Channel actions visíveis e com ícones SVG ===== */
+.channel-actions {
+  display: none;
+  gap: 2px;
+  padding-right: 4px;
+  flex-shrink: 0;
+}
+
+.channel-wrap:hover .channel-actions {
+  display: flex;
+}
+
+.channel-actions button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 5px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.channel-actions button:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.08);
+}
+
+.channel-actions button.delete-btn:hover {
+  color: var(--danger);
+  background: rgba(237, 66, 69, 0.12);
+}
+
+.channel-actions button svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* ===== FIX: Server list item com ícone de imagem ===== */
+.server-list-item {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+
+.server-list-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* ===== FIX: Message bubble garante fundo ===== */
+.message-bubble.mine {
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.message-bubble.theirs {
+  background: var(--bg-elevated-2);
+  border-bottom-left-radius: 4px;
+}
+
+.message-bubble {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}

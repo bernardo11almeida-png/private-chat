@@ -1424,13 +1424,20 @@ function renderServerList() {
   cachedServers.forEach(s => {
     const li = document.createElement('li');
     li.className = 'server-list-item list-item' + (activeServer && activeServer.id === s.id ? ' selected' : '');
-    const initial = (s.name || 'S').charAt(0).toUpperCase();
-    li.innerHTML = `<span class="server-list-initial">${initial}</span><span class="server-list-name">${escapeHtml(s.name)}</span>`;
+
+    let iconHtml;
+    if (s.icon_url) {
+      iconHtml = `<img class="server-list-icon" src="${escapeHtml(s.icon_url)}" alt="" />`;
+    } else {
+      const initial = (s.name || 'S').charAt(0).toUpperCase();
+      iconHtml = `<span class="server-list-initial">${initial}</span>`;
+    }
+
+    li.innerHTML = `${iconHtml}<span class="server-list-name">${escapeHtml(s.name)}</span>`;
     li.addEventListener('click', () => openServer(s));
     list.appendChild(li);
   });
 }
-
 async function openServer(server) {
   activeServer = server;
   activeChannel = null;
@@ -1477,17 +1484,66 @@ function renderServerChannels() {
   (serverDataCache.channels || []).forEach(ch => {
     const li = document.createElement('li');
     li.className = 'list-item channel-wrap';
-    li.innerHTML = `<button class="channel-item list-item ${activeChannel && activeChannel.id === ch.id ? 'selected' : ''}"><span>#</span> ${escapeHtml(ch.name)}</button>
+    const isSelected = activeChannel && activeChannel.id === ch.id;
+
+    li.innerHTML = `
+      <button class="channel-item ${isSelected ? 'selected' : ''}" style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+        <span style="color:var(--text-muted);font-size:16px;flex-shrink:0;">#</span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(ch.name)}</span>
+      </button>
       <div class="channel-actions">
-        <button class="delete-btn" title="Delete channel">🗑</button>
+        <button class="edit-ch-btn" title="Rename channel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="delete-btn" title="Delete channel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        </button>
       </div>`;
+
+    // Selecionar canal
     li.querySelector('.channel-item').addEventListener('click', () => selectChannel(ch));
-    li.querySelector('.delete-btn')?.addEventListener('click', async () => {
-      try {
-        await api(`/channels/${ch.id}`, { method: 'DELETE' });
-        await loadServerData();
-      } catch (err) { showToast(err.message, 'error'); }
+
+    // Editar nome do canal
+    li.querySelector('.edit-ch-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      showPrompt({
+        title: 'Rename Channel',
+        label: 'New name for #' + ch.name,
+        defaultValue: ch.name,
+        confirmText: 'Save',
+        onSubmit: async (newName) => {
+          if (!newName.trim()) return;
+          try {
+            await api(`/channels/${ch.id}`, { method: 'PUT', body: JSON.stringify({ name: newName.trim() }) });
+            await loadServerData();
+            showToast('Channel renamed!', 'success');
+          } catch (err) { showToast(err.message, 'error'); }
+        }
+      });
     });
+
+    // Deletar canal
+    li.querySelector('.delete-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      showConfirm({
+        title: 'Delete Channel',
+        content: `Are you sure you want to delete #${ch.name}? This cannot be undone.`,
+        confirmText: 'Delete',
+        onConfirm: async () => {
+          try {
+            await api(`/channels/${ch.id}`, { method: 'DELETE' });
+            if (activeChannel && activeChannel.id === ch.id) {
+              activeChannel = null;
+              document.getElementById('server-chat-messages').innerHTML = '';
+              document.getElementById('active-channel-name').textContent = '';
+            }
+            await loadServerData();
+            showToast('Channel deleted', 'success');
+          } catch (err) { showToast(err.message, 'error'); }
+        }
+      });
+    });
+
     list.appendChild(li);
   });
 }
