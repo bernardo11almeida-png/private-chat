@@ -369,11 +369,10 @@
                     <div><span class="upload-spinner"></span><span id="file-upload-name-server"></span></div>
                   </div>
                     <form id="server-chat-form" class="chat-input-row">
-                      <button type="button" id="open-file-btn-server" class="btn-secondary" title="Enviar arquivo">
+                      <button type="button" id="open-file-btn-server" class="btn-secondary" title="Send file">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                       </button>
                       <input type="file" id="file-input-server" hidden multiple />
-                      <button type="button" id="open-gif-btn-server" class="btn-secondary" title="Search GIFs">GIF</button>
                       <textarea id="server-chat-input" maxlength="4000" rows="1" placeholder="Message"></textarea>
                       <button type="submit" aria-label="Send message">➤</button>
                     </form>
@@ -387,7 +386,7 @@
         </div>
       </section>
 
-      <!-- ===== SETTINGS (estilo Discord, com sidebar de seções) ===== -->
+      <!-- ===== SETTINGS (Discord-style, with section sidebar) ===== -->
       <section id="view-settings" class="view hidden">
         <div class="settings-layout">
           <nav class="settings-nav">
@@ -435,11 +434,11 @@
                 </button>
               </div>
             
-              <!-- ===== NOVO: Status customizado ===== -->
-              <label class="field-label">Status customizado</label>
-              <input type="text" id="custom-status-input" maxlength="100" placeholder="Ex: jogando algo, ouvindo música..." />
-              <button type="button" id="save-custom-status-btn" class="btn-secondary" style="margin-top:8px;">Salvar</button>
-              <!-- ===== FIM NOVO ===== -->
+              <!-- ===== Custom status ===== -->
+              <label class="field-label">Custom Status</label>
+              <input type="text" id="custom-status-input" maxlength="100" placeholder="e.g. playing something, listening to music..." />
+              <button type="button" id="save-custom-status-btn" class="btn-secondary" style="margin-top:8px;">Save</button>
+              <!-- ===== END ===== -->
             </div>
 
             <!-- PROFILE -->
@@ -530,7 +529,6 @@
                 <label class="toggle"><input type="checkbox" id="pref-notify-popup" checked /><span class="toggle-slider"></span></label>
               </div>            
 
-              <!-- ⬇️ COLE AQUI O NOVO BLOCO ⬇️ -->
               <h3 class="settings-subtitle">Preferences</h3>            
 
               <div class="pref-row">
@@ -602,7 +600,7 @@
               </div>
 
               <form id="chat-form" class="chat-input-row">
-                <button type="button" id="open-file-btn" class="btn-secondary" title="Enviar arquivo">
+                <button type="button" id="open-file-btn" class="btn-secondary" title="Send file">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                 </button>
                 <input type="file" id="file-input-dm" hidden multiple />
@@ -702,11 +700,11 @@
     </div>
   </div>
 
-  <!-- ===== Notificações ===== -->
+  <!-- ===== Notifications ===== -->
   <div id="notification-container" class="notification-container"></div>
   <div id="toast-container" class="toast-container"></div>
 
-  <!-- ===== Modal Customizado ===== -->
+  <!-- ===== Custom Modal ===== -->
   <div id="custom-modal" class="modal-backdrop hidden">
     <div class="custom-modal-card">
       <h2 id="custom-modal-title">Title</h2>
@@ -716,7 +714,7 @@
     </div>
   </div>
 
-  <!-- Twemoji: o mesmo estilo de emoji do Discord -->
+  <!-- Twemoji: same emoji style as Discord -->
 
   <div id="image-lightbox" class="lightbox-backdrop hidden">
     <div class="lightbox-toolbar">
