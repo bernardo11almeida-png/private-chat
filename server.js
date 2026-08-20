@@ -246,9 +246,12 @@ app.delete('/api/account', requireAuth, async (req, res) => {
 
 // ---------- Status ----------
 app.put('/api/status', requireAuth, async (req, res) => {
-  const { status } = req.body;
-  if (!VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Status invalido' });
-  await supabase.from('users').update({ status }).eq('id', req.session.userId);
+  const { status, custom_status } = req.body;
+  if (status && !VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Status invalido' });
+  const update = {};
+  if (status) update.status = status;
+  if (custom_status !== undefined) update.custom_status = (custom_status || '').trim().slice(0, 100) || null;
+  await supabase.from('users').update(update).eq('id', req.session.userId);
   broadcastPresence(req.session.userId);
   res.json({ ok: true });
 });
@@ -942,16 +945,20 @@ app.post('/api/messages/:id/reactions', requireAuth, async (req, res) => {
 const onlineUsers = new Map();
 
 async function broadcastPresence(userId) {
-  const { data: user } = await supabase.from('users').select('status').eq('id', userId).maybeSingle();
+  const { data: user } = await supabase.from('users').select('status, custom_status').eq('id', userId).maybeSingle();
   const connected = onlineUsers.has(userId);
   const visible = connected && user && user.status !== 'invisible';
-  io.emit('presence', { userId, online: visible, status: visible ? user.status : 'offline' });
+  io.emit('presence', { userId, online: visible, status: visible ? user.status : 'offline', custom_status: user?.custom_status || null });
 }
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   const userId = socket.request.session && socket.request.session.userId;
   if (!userId) { socket.disconnect(); return; }
   socket.join('user:' + userId);
+
+  const { data: myGroups } = await supabase.from('group_members').select('group_id').eq('user_id', userId);
+  (myGroups || []).forEach(g => socket.join('group:' + g.group_id));
+
   onlineUsers.set(userId, (onlineUsers.get(userId) || 0) + 1);
   broadcastPresence(userId);
 
@@ -962,11 +969,169 @@ io.on('connection', (socket) => {
     if (member) socket.join('server:' + parsedServerId);
   });
 
+  socket.on('join_group', async (groupId) => {
+    const { data: membership } = await supabase.from('group_members').select('id')
+      .eq('group_id', Number(groupId)).eq('user_id', userId).maybeSingle();
+    if (membership) socket.join('group:' + groupId);
+  });
+
   socket.on('disconnect', () => {
     const count = (onlineUsers.get(userId) || 1) - 1;
     if (count <= 0) { onlineUsers.delete(userId); broadcastPresence(userId); }
     else onlineUsers.set(userId, count);
   });
+});
+
+async function canManageMembers(serverId, userId, permKey) {
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
+  if (server.owner_id === userId) return true;
+  const { data: roles } = await supabase.from('server_member_roles').select('role_id').eq('server_id', serverId).eq('user_id', userId);
+  const roleIds = (roles || []).map(r => r.role_id);
+  if (!roleIds.length) return false;
+  const { data: roleData } = await supabase.from('server_roles').select(permKey).in('id', roleIds);
+  return roleData.some(r => r[permKey]);
+}
+
+app.delete('/api/servers/:id/members/:userId', requireAuth, async (req, res) => {
+  const serverId = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+  const { data: server } = await supabase.from('servers').select('owner_id').eq('id', serverId).maybeSingle();
+  if (!server) return res.status(404).json({ error: 'Servidor nao encontrado' });
+  if (targetId === server.owner_id) return res.status(400).json({ error: 'Nao pode remover o dono' });
+  if (!await canManageMembers(serverId, req.session.userId, 'kick_members')) return res.status(403).json({ error: 'Sem permissao' });
+
+  await supabase.from('server_members').delete().eq('server_id', serverId).eq('user_id', targetId);
+  await supabase.from('server_member_roles').delete().eq('server_id', serverId).eq('user_id', targetId);
+  io.to('server:' + serverId).emit('member_kicked', { serverId, userId: targetId });
+  io.in('user:' + targetId).socketsLeave('server:' + serverId);
+  res.json({ ok: true });
+});
+
+app.post('/api/servers/:id/ban', requireAuth, async (req, res) => {
+  const serverId = Number(req.params.id);
+  const { user_id, reason } = req.body;
+  if (!await canManageMembers(serverId, req.session.userId, 'ban_members')) return res.status(403).json({ error: 'Sem permissao' });
+
+  await supabase.from('server_bans').upsert({ server_id: serverId, user_id: Number(user_id), banned_by: req.session.userId, reason: reason || null });
+  await supabase.from('server_members').delete().eq('server_id', serverId).eq('user_id', Number(user_id));
+  io.to('server:' + serverId).emit('member_kicked', { serverId, userId: Number(user_id) });
+  res.json({ ok: true });
+});
+
+app.post('/api/groups', requireAuth, async (req, res) => {
+  const { name, member_ids } = req.body;
+  if (!Array.isArray(member_ids) || member_ids.length < 2) {
+    return res.status(400).json({ error: 'Selecione pelo menos 2 amigos' });
+  }
+  const allIds = [...new Set([req.session.userId, ...member_ids.map(Number)])];
+  for (const id of allIds) {
+    if (id !== req.session.userId && !await areFriends(req.session.userId, id)) {
+      return res.status(403).json({ error: 'Voce so pode adicionar amigos' });
+    }
+  }
+  const { data: group, error } = await supabase.from('group_conversations')
+    .insert({ name: name?.trim() || null, owner_id: req.session.userId })
+    .select().single();
+  if (error) return res.status(500).json({ error: 'Erro ao criar grupo' });
+
+  await supabase.from('group_members').insert(allIds.map(user_id => ({ group_id: group.id, user_id })));
+  allIds.forEach(uid => io.to('user:' + uid).emit('group_created', group));
+  res.json({ group });
+});
+
+app.get('/api/groups', requireAuth, async (req, res) => {
+  const { data: memberships } = await supabase.from('group_members')
+    .select('group_id, group_conversations(*)').eq('user_id', req.session.userId);
+  const groups = (memberships || []).map(m => m.group_conversations).filter(Boolean);
+
+  for (const g of groups) {
+    const { data: members } = await supabase.from('group_members')
+      .select('user_id, users:user_id(id, display_name, avatar)').eq('group_id', g.id);
+    g.members = (members || []).map(m => m.users).filter(Boolean);
+  }
+  res.json({ groups });
+});
+
+app.post('/api/groups/:id/members', requireAuth, async (req, res) => {
+  const groupId = Number(req.params.id);
+  const { user_id } = req.body;
+  const { data: membership } = await supabase.from('group_members').select('*')
+    .eq('group_id', groupId).eq('user_id', req.session.userId).maybeSingle();
+  if (!membership) return res.status(403).json({ error: 'Voce nao esta neste grupo' });
+  if (!await areFriends(req.session.userId, Number(user_id))) return res.status(403).json({ error: 'Adicione apenas amigos' });
+
+  await supabase.from('group_members').insert({ group_id: groupId, user_id: Number(user_id) });
+  io.to('group:' + groupId).emit('group_member_added', { groupId, userId: Number(user_id) });
+  res.json({ ok: true });
+});
+
+app.delete('/api/groups/:id/members/:userId', requireAuth, async (req, res) => {
+  const groupId = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+  const { data: group } = await supabase.from('group_conversations').select('owner_id').eq('id', groupId).maybeSingle();
+  if (!group) return res.status(404).json({ error: 'Grupo nao encontrado' });
+  if (targetId !== req.session.userId && group.owner_id !== req.session.userId) {
+    return res.status(403).json({ error: 'Sem permissao' });
+  }
+  await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', targetId);
+  io.to('group:' + groupId).emit('group_member_removed', { groupId, userId: targetId });
+  res.json({ ok: true });
+});
+
+app.delete('/api/groups/:id', requireAuth, async (req, res) => {
+  const groupId = Number(req.params.id);
+  const { data: group } = await supabase.from('group_conversations').select('owner_id').eq('id', groupId).maybeSingle();
+  if (!group) return res.status(404).json({ error: 'Grupo nao encontrado' });
+  if (group.owner_id !== req.session.userId) return res.status(403).json({ error: 'Apenas o dono pode deletar o grupo' });
+
+  const { data: members } = await supabase.from('group_members').select('user_id').eq('group_id', groupId);
+
+  await supabase.from('group_messages').delete().eq('group_id', groupId);
+  await supabase.from('group_members').delete().eq('group_id', groupId);
+  const { error } = await supabase.from('group_conversations').delete().eq('id', groupId);
+
+  if (error) {
+    console.error('Erro ao deletar grupo:', error);
+    return res.status(500).json({ error: 'Erro ao deletar grupo' });
+  }
+
+  (members || []).forEach(m => io.to('user:' + m.user_id).emit('group_deleted', { groupId }));
+  res.json({ ok: true });
+});
+
+app.get('/api/groups/:id/messages', requireAuth, async (req, res) => {
+  const groupId = Number(req.params.id);
+  const before = req.query.before ? Number(req.query.before) : null;
+  const { data: membership } = await supabase.from('group_members').select('user_id') // CORRIGIDO
+    .eq('group_id', groupId).eq('user_id', req.session.userId).maybeSingle();
+  if (!membership) return res.status(403).json({ error: 'Voce nao esta neste grupo' });
+
+  let query = supabase.from('group_messages')
+    .select('*, users:sender_id(id, display_name, avatar)')
+    .eq('group_id', groupId).order('id', { ascending: false }).limit(50);
+  if (before) query = query.lt('id', before);
+  const { data: rows } = await query;
+  rows.reverse();
+  res.json({ messages: rows, has_more: rows.length === 50 });
+});
+
+app.post('/api/groups/:id/messages', requireAuth, messageLimiter, async (req, res) => {
+  const groupId = Number(req.params.id);
+  const { content, reply_to } = req.body;
+  if (!content || !content.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
+  if (content.length > 4000) return res.status(400).json({ error: 'Mensagem muito longa' });
+
+  const { data: membership } = await supabase.from('group_members').select('user_id') // CORRIGIDO
+    .eq('group_id', groupId).eq('user_id', req.session.userId).maybeSingle();
+  if (!membership) return res.status(403).json({ error: 'Voce nao esta neste grupo' });
+
+  const { data: message, error } = await supabase.from('group_messages')
+    .insert({ group_id: groupId, sender_id: req.session.userId, content: content.trim(), reply_to: reply_to ? Number(reply_to) : null })
+    .select('*, users:sender_id(id, display_name, avatar)').single();
+  if (error) return res.status(500).json({ error: 'Erro ao enviar mensagem' });
+
+  io.to('group:' + groupId).emit('new_group_message', message);
+  res.json({ message });
 });
 
 server.listen(PORT, () => console.log(`Synto rodando em http://localhost:${PORT}`));

@@ -373,7 +373,8 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                       </button>
                       <input type="file" id="file-input-server" hidden multiple />
-                      <input type="text" id="server-chat-input" maxlength="4000" placeholder="Message" autocomplete="off" />
+                      <button type="button" id="open-gif-btn-server" class="btn-secondary" title="Search GIFs">GIF</button>
+                      <textarea id="server-chat-input" maxlength="4000" rows="1" placeholder="Message"></textarea>
                       <button type="submit" aria-label="Send message">➤</button>
                     </form>
                   <div id="chat-locked-notice" class="chat-locked hidden" style="padding: 16px; text-align: center; border-top: 1px solid var(--border); color: var(--text-muted); background: var(--bg-elevated-2); font-size: 14px;">
@@ -404,7 +405,7 @@
             <div id="settings-section-account" class="settings-section">
               <h2 class="settings-title">My Account</h2>
               <p class="settings-desc">Your account details and presence status.</p>
-
+            
               <div class="account-card">
                 <div class="account-banner" id="account-banner"></div>
                 <div class="account-body">
@@ -417,7 +418,7 @@
                   <button type="button" class="btn-secondary" id="go-profile-btn">Edit User Profile</button>
                 </div>
               </div>
-
+            
               <h3 class="settings-subtitle">Status</h3>
               <div class="status-grid" id="status-grid">
                 <button type="button" class="status-btn" data-status="online">
@@ -433,6 +434,12 @@
                   <span class="status-dot invisible"></span> Invisible
                 </button>
               </div>
+            
+              <!-- ===== NOVO: Status customizado ===== -->
+              <label class="field-label">Status customizado</label>
+              <input type="text" id="custom-status-input" maxlength="100" placeholder="Ex: jogando algo, ouvindo música..." />
+              <button type="button" id="save-custom-status-btn" class="btn-secondary" style="margin-top:8px;">Salvar</button>
+              <!-- ===== FIM NOVO ===== -->
             </div>
 
             <!-- PROFILE -->
@@ -550,8 +557,13 @@
       <section id="view-chat" class="view hidden">
         <div class="chat-layout">
           <div class="chat-friend-list">
-            <h3>Direct Messages</h3>
+            <div class="chat-friend-list-header">
+              <h3>Direct Messages</h3>
+              <button type="button" id="new-group-btn" class="btn-secondary" title="New Group">+</button>
+            </div>
             <ul id="chat-friends-list" class="simple-list"></ul>
+            <h3 style="margin-top:16px;">Groups</h3>
+            <ul id="chat-groups-list" class="simple-list"></ul>
           </div>
           <div class="chat-window">
             <div id="chat-empty" class="chat-empty">Select a friend to chat</div>
@@ -595,7 +607,7 @@
                 </button>
                 <input type="file" id="file-input-dm" hidden multiple />
                 <button type="button" id="open-gif-btn" class="btn-secondary" title="Search GIFs">GIF</button>
-                <input type="text" id="chat-input" placeholder="Type a message... try :fire:" autocomplete="off" />
+                <textarea id="chat-input" rows="1" placeholder="Type a message... try :fire:"></textarea>
                 <button type="submit">➤</button>
               </form>
             </div>
@@ -675,6 +687,18 @@
       <input type="text" id="gif-select-search-input" class="gif-search" placeholder="Search GIFs..." />
       <div id="gif-select-grid" class="gif-grid" style="height:260px;"></div>
       <p class="form-error" id="gif-select-error"></p>
+    </div>
+  </div>
+
+  <div id="create-group-modal" class="modal-backdrop hidden">
+    <div class="profile-modal-card" style="width:360px; text-align:left; padding:20px;">
+      <button id="create-group-close" class="modal-close">✖</button>
+      <h3 style="margin-top:0;">New Group</h3>
+      <input type="text" id="group-name-input" placeholder="Group name (optional)" style="width:100%; margin-bottom:12px;" />
+      <p class="field-label">Select friends (min 2)</p>
+      <div id="group-friends-checklist" class="group-friends-checklist"></div>
+      <p class="form-error" id="group-create-error"></p>
+      <button type="button" id="group-create-submit-btn" style="width:100%; margin-top:12px;">Create Group</button>
     </div>
   </div>
 

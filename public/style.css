@@ -2918,3 +2918,32 @@ body.compact-mode .reactions-container:not(:empty) { margin-top: 1px; margin-bot
 .gif-scroll-hint.visible {
   opacity: 1;
 }
+
+.mention { background: rgba(88,101,242,.16); color: var(--accent); padding: 0 4px; border-radius: 4px; font-weight: 600; cursor: pointer; }
+.mention-me { background: rgba(88,101,242,.35); }
+.md-inline-code { background: var(--bg-elevated-2); padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: .9em; }
+.md-code-block { background: var(--bg-elevated-2); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-family: monospace; font-size: .85em; margin: 4px 0; }
+.mention { cursor: pointer; }
+
+.chat-input-row textarea {
+  flex: 1;
+  resize: none;
+  max-height: 150px;
+  min-height: 40px;
+  line-height: 1.4;
+  padding: 10px 12px;
+  font-family: inherit;
+  overflow-y: auto;
+  border: 1px solid transparent;
+}
+.chat-friend-list-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.chat-friend-list-header h3 { margin:0; }
+.chat-friend-list-header button { padding:4px 10px; font-size:16px; line-height:1; }
+
+.group-friends-checklist { max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+.group-friend-check-item { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; }
+.group-friend-check-item:hover { background: var(--bg-elevated-2); }
+
+.group-msg-sender { font-size:11px; font-weight:600; margin-bottom:2px; color: var(--text-muted); }
+.message-wrapper.group-message.theirs { align-items:flex-start; }
+.message-wrapper.group-message.mine { align-items:flex-end; }
